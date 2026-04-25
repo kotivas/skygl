@@ -2,8 +2,6 @@
 
 ![OpenGL](https://img.shields.io/badge/OpenGL-4.x-blue?style=flat-square) ![Status](https://img.shields.io/badge/Status-In%20Development-orange?style=flat-square)
 
----
-
 Project written with OpenGL focused on creating and exploring in-game sky including weather, clouds and atmosphere
 rendering.
 
@@ -28,16 +26,12 @@ Copy the `res` folder next to the executable, then run it
 
 ## Planned
 
----
-
 - [ ] Procedural weather system
 - [ ] Volumetric cloud optimization
 - [ ] Night sky
 - [ ] Simplify bruneton atmosphere model?
 
 ## References
-
----
 
 - Bruneton, E. (2017) — Precomputed Atmospheric Scattering: a New Implementation
   https://ebruneton.github.io/precomputed_atmospheric_scattering/
