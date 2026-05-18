@@ -26,8 +26,10 @@ layout (std140, binding = 1) uniform CloudsParameters {
     float uMaxDistance;
     float uCoverage;
 
-    float sigma;
+    float uSigmaS;
     float uSigmaA;
+
+    float uPrecipitation;
 
     float uHighCloudsScale;
     float uWeatherMapScale;
@@ -39,10 +41,7 @@ layout (std140, binding = 1) uniform CloudsParameters {
 #define   LIGHT_RAY_STEPS 8
 
 const float fogFactor = uMaxDistance / 3.0;
-
-const float uSigmaS = 0.01f * 1000.0;
-
-const float sigmaT = uSigmaA + uSigmaS;
+const float sigmaT = (uSigmaA + uSigmaS) * exp2(uPrecipitation); // SIGMA TRANSMITTANCE
 
 const float cirrusSpeedFactor = 3.5;
 const float altoSpeedFactor = 2.0;
@@ -67,12 +66,6 @@ float HeightGradient(float h, float cloudType) {
     float wCb = cloudType * cloudType;
 
     return wS * stratus + wCu * cumulus + wCb * cumulonimbus;
-}
-
-float yFalloff(vec3 position) {
-    float falloffDist = uCloudLayerThickness * 0.1;
-    float distY = min(falloffDist, min(position.y - uCloudLayerBottom, uCloudLayerBottom + uCloudLayerThickness - position.y));
-    return distY / falloffDist;
 }
 
 float SampleDensity(vec3 pos){
@@ -102,7 +95,6 @@ float SampleDensity(vec3 pos){
     baseCloud = remap(baseCloud, 1.0-coverage, 1.0, 0.0, 1.0);
     baseCloud *= coverage;
     baseCloud *= heightGradient;
-    //        baseCloud *= yFalloff(pos);
 
     if (baseCloud < 0) return 0;
 

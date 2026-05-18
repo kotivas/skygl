@@ -10,6 +10,10 @@ namespace Sky::Clouds {
 
     CloudsModel::CloudsModel() : m_params(), m_baseNoise(nullptr), m_detailNoise(nullptr), m_weatherMap(nullptr), m_highCloudsMap(nullptr) {}
 
+    Gl::Texture* CloudsModel::getWeatherMap() const {
+        return m_weatherMap;
+    }
+
     void CloudsModel::bind(Gl::Shader* shader) const {
         shader->use();
 
@@ -43,12 +47,10 @@ namespace Sky::Clouds {
         m_params.sigmaS *= LenghtUnitInMeters;
         m_params.sigmaA *= LenghtUnitInMeters;
 
-        std::cout << "just in case" << std::endl;
-
         uniformBuffer.setData(&m_params);
     }
 
-    void CloudsModel::setWeatherMap(const uint8_t* data) const {
+    void CloudsModel::setWeatherMap(const void* data) const {
         m_weatherMap->setData(data, m_weatherMap->getWidth(), m_weatherMap->getHeight());
     }
     void CloudsModel::setHighCloudsMap(const uint8_t* data) const {
@@ -66,7 +68,7 @@ namespace Sky::Clouds {
          * .B - cloud type
          */
         m_weatherMap = new Gl::Texture();
-        m_weatherMap->create(WEATHER_MAP_SIZE, WEATHER_MAP_SIZE, GL_RGB, GL_RGB8, GL_UNSIGNED_BYTE);
+        m_weatherMap->create(WEATHER_MAP_SIZE, WEATHER_MAP_SIZE, GL_RGB, GL_RGB16F, GL_FLOAT);
         m_weatherMap->setWrapMode(GL_REPEAT);
         m_weatherMap->setMinFilter(GL_LINEAR);
         m_weatherMap->setMagFilter(GL_LINEAR);

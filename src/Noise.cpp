@@ -1,0 +1,89 @@
+#include "Noise.hpp"
+
+#include <glm/vec2.hpp>
+#include <glm/trigonometric.hpp>
+
+namespace Noise {
+
+    // cubic interpolation
+    float cubicLerp(float a0, float a1, float w) {
+        return (a1 - a0) * (3.0f - w * 2.0f) * w * w + a0;
+    }
+
+    // hash func converting int x, y into the float x, y between 0 and 2π
+    glm::vec2 randomGradient(int ix, int iy) {
+        // No precomputed gradients mean this works for any number of grid coordinates
+        const unsigned w = 8 * sizeof(unsigned);
+        const unsigned s = w / 2;
+        unsigned a = ix, b = iy;
+        a *= 3284157443;
+
+        b ^= a << s | a >> (w - s);
+        b *= 1911520717;
+
+        a ^= b << s | b >> (w - s);
+        a *= 2048419325;
+        const float random = a * (3.14159265 / ~(~0u >> 1)); // in [0, 2*Pi]
+
+        // Create the vector from the angle
+        glm::vec2 v;
+        v.x = glm::sin(random);
+        v.y = glm::cos(random);
+
+        return v;
+    }
+
+    float dotGridGradient(int ix, int iy, float x, float y) {
+        glm::vec2 gradient = randomGradient(ix, iy);
+
+        // distance vector
+        float dx = x - float(ix);
+        float dy = y - float(iy);
+
+        // return dot product
+        return (dx * gradient.x + dy * gradient.y);
+    }
+
+    float Perlin(float x, float y) {
+        // grid cell corner coords
+        const int x0 = static_cast<int>(x);
+        const int y0 = static_cast<int>(y);
+        const int x1 = x0 + 1;
+        const int y1 = y0 + 1;
+
+        // interpolation weights
+        const float sx = x - static_cast<float>(x0);
+        const float sy = y - static_cast<float>(y0);
+
+        // interpolate top two corners
+        float n0 = dotGridGradient(x0, y0, x, y);
+        float n1 = dotGridGradient(x1, y0, x, y);
+        const float ix0 = cubicLerp(n0, n1, sx);
+
+        // interpolate bottom two corners
+        n0 = dotGridGradient(x0, y1, x, y);
+        n1 = dotGridGradient(x1, y1, x, y);
+        const float ix1 = cubicLerp(n0, n1, sx);
+
+        return cubicLerp(ix0, ix1, sy);
+    }
+
+    float PerlinFBM(size_t octaves, float x, float y, float freq, float amp) {
+        float result = 0.0;
+        float denom = 0.0;
+
+        const float gain = 0.5f;
+        const float lacunarity = 2.0f;
+
+        for (int i = 0; i < octaves; i++) {
+            result += amp * Perlin(x * freq, y * freq);
+            denom += amp;
+
+            amp *= gain;
+            freq *= lacunarity;
+        }
+        return result / denom;
+    }
+
+
+} // namespace Noise

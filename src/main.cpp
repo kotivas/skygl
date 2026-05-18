@@ -16,6 +16,9 @@
 #include "Sky/Sun.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
+#include "Noise.hpp"
+
+
 #include <stb_image.h>
 
 #include <array>
@@ -54,7 +57,7 @@ Sky::Atm::AtmosphereParameters atm_params = {
     .mieSingleScatteringAlbedo = 0.9,
     .miePhaseFunctionG = 0.9,
     .groundAlbedo = 0.1,
-    .luminance = Sky::Atm::Luminance::Precomputed,
+    .luminance = Sky::Atm::Luminance::Approximate,
     .numScatteringOrders = 4,
 };
 
@@ -68,7 +71,9 @@ Sky::Clouds::CloudsParameters cloudsParams = {
     .coverage = 1.0f,
 
     .sigmaS = 0.01f,
-    .sigmaA = 0.0f,
+    .sigmaA = 0.0f, // use sigma absorption for high humidity cloud
+
+    .precipitation = 1.0f,
 
     .highCloudsScale = 32 * 1000.0,
     .weatherMapScale = 128 * 1000.0,
@@ -89,6 +94,12 @@ GLuint cloudsColor;
 uint32_t quadVao;
 uint32_t quadVbo;
 
+// ! TEMP
+float w_freq = 2.5f;
+float edge0 = 0.1f;
+float edge1 = 1.0f;
+
+
 #define TIME_SPEED 30
 
 constexpr int render_width = 1600;
@@ -107,6 +118,7 @@ void InitImGui() {
     ImGui_ImplGlfw_InitForOpenGL(Gl::window, true);
     ImGui_ImplOpenGL3_Init("#version 330 core");
 }
+
 void DrawMetrics(double dt) {
     ImGui::Begin("Metrics");
 
@@ -162,6 +174,9 @@ void DrawDebugOverlay(double dt) {
 
         ImGui::SliderFloat("Cirrus density", &cloudsParams.cirrusDensity, 0.f, 1.f, "%.2f");
         ImGui::SliderFloat("Alto density", &cloudsParams.altoDensity, 0.f, 1.f, "%.2f");
+
+        ImGui::InputFloat("Sigma Scattering", &cloudsParams.sigmaS, 0.001f, 0.01f);
+        ImGui::InputFloat("Sigma Absorption", &cloudsParams.sigmaA, 0.001f, 0.01f);
 
         if (ImGui::Button("Update")) clouds_model.updateParameters(cloudsParams);
     }
@@ -255,6 +270,7 @@ void CloudsPass() {
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+
 void ComposePass() {
     scene.composeShader.use();
 
@@ -289,13 +305,54 @@ void ClearPass() {
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
+// https://www.shadertoy.com/view/lsl3RH
+float PerlinWarp(float x, float y, float shift) {
+
+    const float len = sqrt(x * x + y * y);
+    x += 0.03f * sin(0.27f * shift + len * 4.1f);
+    y += 0.03f * sin(0.23f * shift + len * 4.3f);
+
+    float ox = 0.5f + Noise::PerlinFBM(4, 0.9f * x, 0.9f * y, w_freq, 1.0f) * 0.5f;
+    float oy = 0.5f + Noise::PerlinFBM(4, 0.9f * x + 7.8f, 0.9f * y + 7.8f, w_freq, 1.0f) * 0.5f;
+
+    const float olen = sqrt(ox * ox + oy * oy);
+    ox += 0.04f * sin(0.12f * shift + olen);
+    oy += 0.04f * sin(0.14f * shift + olen);
+
+    const float nx = 0.5f + Noise::PerlinFBM(6, 3.0f * ox + 16.8f, 3.0f * oy + 16.8f, w_freq, 1.0f) * 0.5f;
+    const float ny = 0.5f + Noise::PerlinFBM(6, 3.0f * ox + 11.5f, 3.0f * oy + 11.5f, w_freq, 1.0f) * 0.5f;
+
+    const float fx = 1.8 * x + 6.0 * nx;
+    const float fy = 1.8 * y + 6.0 * ny;
+    const float f = 0.5f + Noise::PerlinFBM(4, fx, fy, w_freq, 1.0f) * 0.5f;
+
+    return std::lerp(f, f * f * f * 3.5, f * abs(nx));
+}
+
 void LoadWeatherMap() {
-    stbi_set_flip_vertically_on_load(true);
-    int channels, x, y;
-    unsigned char* weather = stbi_load("./res/weather.png", &x, &y, &channels, 3);
-    assert(weather != nullptr);
-    clouds_model.setWeatherMap(weather);
-    stbi_image_free(weather);
+    const int size = Sky::Clouds::WEATHER_MAP_SIZE;
+
+    std::vector<float> weather;
+    weather.resize(size * size * 3);
+
+    for (int x = 0; x < size; x++) {
+        for (int y = 0; y < size; y++) {
+            const float fx = (float)x / (float)size;
+            const float fy = (float)y / (float)size;
+            const int coord = (y * size + x) * 3;
+
+            const float c = PerlinWarp(fx, fy, 0);
+            const float coverage = glm::smoothstep(edge0, edge1, c);
+            // const float prec = 0.5f + Noise::PerlinFBM(3, fx, fy, w_freq, 1.0f) * 0.5f;
+            const float type = 0.5f + Noise::Perlin(fx * 6.0f, fy * 6.0f) * 0.5f;
+
+            weather[coord + 0] = coverage; // coverage
+            weather[coord + 1] = 0;        // precipitation
+            weather[coord + 2] = 1;        // cloud type
+        }
+    }
+
+    clouds_model.setWeatherMap(weather.data());
 }
 
 void ProcessKeys(double dt) {
@@ -348,7 +405,7 @@ void InitCloud() {
     std::cout << std::format("alto.png is loaded ({0}x{1}x{2})", x, y, channels) << std::endl;
     assert(alto);
 
-    int res = Sky::Clouds::HIGH_CLOUDS_MAP_SIZE * Sky::Clouds::HIGH_CLOUDS_MAP_SIZE;
+    const int res = Sky::Clouds::HIGH_CLOUDS_MAP_SIZE * Sky::Clouds::HIGH_CLOUDS_MAP_SIZE;
     auto* combined = new uint8_t[res * 2];
     for (int i = 0; i < res; i++) {
         combined[i * 2 + 0] = cirrus[i]; // R = cirrus
@@ -382,6 +439,20 @@ void LoadIcon(const std::string& path) {
 
         stbi_image_free(pixels);
     }
+}
+
+void DrawWeatherMap() {
+    ImGui::Begin("Weather");
+
+    ImGui::SliderFloat("Freq", &w_freq, 0.5f, 12.0f);
+    ImGui::SliderFloat("Edge0", &edge0, 0.0f, 1.0f);
+    ImGui::SliderFloat("Edge1", &edge1, 0.0f, 1.0f);
+
+    if (ImGui::SliderFloat("Precipitation", &cloudsParams.precipitation, 0.0f, 1.0f)) clouds_model.updateParameters(cloudsParams);
+
+    ImGui::Image((ImTextureID)(intptr_t)clouds_model.getWeatherMap()->getHandle(), ImVec2(Sky::Clouds::WEATHER_MAP_SIZE, Sky::Clouds::WEATHER_MAP_SIZE));
+
+    ImGui::End();
 }
 
 int main() {
@@ -445,6 +516,7 @@ int main() {
         // imgui
         DrawDebugOverlay(dt);
         DrawMetrics(dt);
+        DrawWeatherMap();
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

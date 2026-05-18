@@ -17,6 +17,8 @@ namespace Sky::Clouds {
         float sigmaS; // Volumetric cloud scattering factor
         float sigmaA; // Volumetric cloud absorption factor
 
+        float precipitation;
+
         float highCloudsScale;
         float weatherMapScale;
         float baseNoiseScale;
@@ -33,12 +35,14 @@ namespace Sky::Clouds {
         void generateBaseNoise(const Gl::ComputeShader& shader) const;
         void generateDetailNoise(const Gl::ComputeShader& shader) const;
 
-        void setWeatherMap(const uint8_t* data) const;
+        void setWeatherMap(const void* data) const;
         void setHighCloudsMap(const uint8_t* data) const;
 
         void bind(Gl::Shader* shader) const;
 
         void updateParameters(const CloudsParameters& params);
+
+        [[nodiscard]] Gl::Texture* getWeatherMap() const;
 
         ~CloudsModel();
 

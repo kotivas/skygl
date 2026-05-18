@@ -21,6 +21,7 @@ set(SOURCE src/main.cpp
         src/Gl/Shader.cpp
         src/Gl/Texture.cpp
         src/Gl/UniformBuffer.cpp
+        src/Noise.cpp
 )
 
 if (WIN32)
