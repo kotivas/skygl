@@ -7,4 +7,5 @@ namespace Noise {
     // Persistence is the loss of amplitude between successive octaves (usually 1/lacunarity)
     float PerlinFBM(size_t octaves, float x, float y, float freq = 1.0, float amp = 1.0);
 
+    float PerlinWarp(float x, float y, float shift, float freq);
 } // namespace Noise

@@ -13,23 +13,16 @@ uniform sampler2D highCloudsMap;
 uniform vec3 uCameraPos;
 uniform float uTime;
 uniform vec3 uSunDir;
-uniform float uWindSpeed;// in m/s
 
 layout (std140, binding = 1) uniform CloudsParameters {
-    float uCloudLayerThickness;
-    float uCloudLayerBottom;
-    float uHighCloudsHeight;
-
-    float uCirrusDensity;
-    float uAltoDensity;
-
     float uMaxDistance;
-    float uCoverage;
 
     float uSigmaS;
     float uSigmaA;
 
-    float uPrecipitation;
+    float uCloudLayerThickness;
+    float uCloudLayerBottom;
+    float uHighCloudsHeight;
 
     float uHighCloudsScale;
     float uWeatherMapScale;
@@ -37,11 +30,19 @@ layout (std140, binding = 1) uniform CloudsParameters {
     float uDetailNoiseScale;
 };
 
+layout (std140, binding = 2) uniform WeatherParameters {
+    float uPrecipitation;
+    float uCoverage;
+    float uCirrusDensity;
+    float uAltoDensity;
+    float uWindSpeed;
+};
+
 #define   CLOUD_RAY_STEPS 160
 #define   LIGHT_RAY_STEPS 8
 
 const float fogFactor = uMaxDistance / 3.0;
-const float sigmaT = (uSigmaA + uSigmaS) * exp2(uPrecipitation); // SIGMA TRANSMITTANCE
+const float sigmaT = (uSigmaA + uSigmaS) * exp2(uPrecipitation);// SIGMA TRANSMITTANCE
 
 const float cirrusSpeedFactor = 3.5;
 const float altoSpeedFactor = 2.0;
@@ -72,12 +73,8 @@ float SampleDensity(vec3 pos){
     float heightFraction = (length(pos - earth_center) - bottom_radius - uCloudLayerBottom) / uCloudLayerThickness;
     if (heightFraction < 0.0 || heightFraction > 1.0) return 0.0;
 
-    // === weather map ===
-    //    vec2 weather_uv = pos.xz / uWeatherMapScale + uTime * uWindSpeed / uWeatherMapScale;
-    //    vec3 weather = texture(weatherMap, weather_uv).rgb;
-
     vec3 n = normalize(pos - earth_center);
-    // triplanar fixes 2d texture stretching on sphere
+    //     triplanar fixes 2d texture stretching on sphere
     vec3 weather = triplanar(weatherMap, pos + uTime * uWindSpeed, n, 1/ uWeatherMapScale).rgb;
 
     float coverage = weather.r * uCoverage;

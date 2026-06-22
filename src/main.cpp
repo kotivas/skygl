@@ -16,34 +16,22 @@
 #include "Sky/Sun.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "Noise.hpp"
-
-
 #include <stb_image.h>
 
 #include <array>
-#include <iostream>
-#include <numeric>
 #include <chrono>
 
 #include "Gl/Shader.hpp"
+#include "Sky/SkySystem.hpp"
 #include "Sky/Clouds/CloudsModel.hpp"
+#include "Sky/Weather.hpp"
 
-struct Scene {
-    // double time = 21600; // 6 am
-    double time = 43200; // 12 am
-    Sky::Sun sun;
-    Gl::Shader skyShader;
-    Gl::Shader cloudsShader;
-    Gl::Shader composeShader;
+#include <iostream>
 
-    Camera camera;
-
-    float exposure = 0.00076f; // 1/1300
-    float gamma = 2.2f;
-
-    float speed = 100.f / Sky::LenghtUnitInMeters;
-} scene;
+Camera camera;
+float exposure = 0.00076f;
+float gamma = 2.2f;
+float speed = 100.f / Sky::LenghtUnitInMeters;
 
 Sky::Atm::AtmosphereParameters atm_params = {
     // (computed so at to get 300 Dobson units of ozone - for this we divide 300 DU by the integral of
@@ -61,19 +49,16 @@ Sky::Atm::AtmosphereParameters atm_params = {
     .numScatteringOrders = 4,
 };
 
+Sky::WeatherParameters weatherParameters = Sky::Preset::Cloudy;
+
 Sky::Clouds::CloudsParameters cloudsParams = {
+    .maxDistance = 128000.f,
+    .sigmaS = 0.01f,
+    .sigmaA = 0.0f,
+
     .cloudLayerThickness = Sky::Clouds::CLOUD_LAYER_THICKNESS,
     .cloudLayerBottom = Sky::Clouds::CLOUD_LAYER_BOTTOM,
     .highCloudsHeight = Sky::Clouds::HIGH_CLOUDS_HEIGHT,
-    .cirrusDensity = 0.05f,
-    .altoDensity = 0.05f,
-    .maxDistance = 128000.f,
-    .coverage = 1.0f,
-
-    .sigmaS = 0.01f,
-    .sigmaA = 0.0f, // use sigma absorption for high humidity cloud
-
-    .precipitation = 1.0f,
 
     .highCloudsScale = 32 * 1000.0,
     .weatherMapScale = 128 * 1000.0,
@@ -81,35 +66,11 @@ Sky::Clouds::CloudsParameters cloudsParams = {
     .detailNoiseScale = 1.5 * 1000.0,
 };
 
-float windSpeed = 2.0f; // in m/s
-
-Sky::Atm::AtmosphereModel atm_model;
-Sky::Clouds::CloudsModel clouds_model;
-
-GLuint skyFBO;
-GLuint skyColor;
-GLuint cloudsFBO;
-GLuint cloudsColor;
-
-uint32_t quadVao;
-uint32_t quadVbo;
-
-// ! TEMP
-float w_freq = 2.5f;
-float edge0 = 0.1f;
-float edge1 = 1.0f;
-
-
-#define TIME_SPEED 30
+Sky::SkyShaders skyShaders;
+Sky::SkySystem sky;
 
 constexpr int render_width = 1600;
 constexpr int render_height = 900;
-constexpr int sky_width = render_width;
-constexpr int sky_height = render_height;
-constexpr int clouds_width = render_width * 0.5;
-constexpr int clouds_height = render_height * 0.5;
-
-static bool timeStop = false;
 
 void InitImGui() {
     IMGUI_CHECKVERSION();
@@ -122,306 +83,151 @@ void InitImGui() {
 void DrawMetrics(double dt) {
     ImGui::Begin("Metrics");
 
-    // precompute metrics
-    const float t = fmod(scene.time, Sky::DAY_LENGHT);
-    const int hour = static_cast<int>(t / 3600.0f);
-    const int minute = static_cast<int>((t - hour * 3600.0f) / 60.0f);
-
-    ImGui::Text("Time: %.2f %02d:%02d", scene.time, hour, minute);
     ImGui::Text("CPU Frametime: %.2f", dt * 1000.f);
     ImGui::Text("FPS: %.2f", 1 / dt);
-    ImGui::Text("Pos: %.2f, %.2f, %.2f", scene.camera.position.x, scene.camera.position.y, scene.camera.position.z);
-    ImGui::Text("Speed: %.1f", scene.speed);
+    ImGui::Text("Pos: %.2f, %.2f, %.2f", camera.position.x, camera.position.y, camera.position.z);
+    ImGui::Text("Speed: %.1f", speed);
 
     ImGui::End();
 }
-void DrawDebugOverlay(double dt) {
-    ImGui::Begin("Settings");
 
-    if (ImGui::CollapsingHeader("General")) {
-        ImGui::InputFloat("Gamma", &scene.gamma);
-        ImGui::InputFloat("Sens", &scene.camera.sensitivity);
-        if (ImGui::SliderFloat("FOV", &scene.camera.fov, 55, 100, "%.1f")) scene.camera.calcProjMat(render_width, render_height);
-        ImGui::InputFloat("Exposure", &scene.exposure, 0.00001, 0.0001, "%.5f");
-        ImGui::InputFloat("Wind speed (m/s)", &windSpeed, 1.0f, 2.5f, "%.2f");
-    }
+// void DrawDebugOverlay(double dt) {
+//     ImGui::Begin("Settings");
+//
+//     if (ImGui::CollapsingHeader("General")) {
+//         ImGui::InputFloat("Gamma", &gamma);
+//         ImGui::InputFloat("Sens", &camera.sensitivity);
+//         if (ImGui::SliderFloat("FOV", &camera.fov, 55, 100, "%.1f")) camera.calcProjMat(render_width, render_height);
+//         ImGui::InputFloat("Exposure", &exposure, 0.00001, 0.0001, "%.5f");
+//     }
+//
+//     if (ImGui::CollapsingHeader("Bruneton")) {
+//         ImGui::Text("maxOzoneNumberDensity: %.3e", atm_params.maxOzoneNumberDensity);
+//         ImGui::InputDouble("rayleigh", &atm_params.rayleigh, 0.001, 0.01, "%.15f");
+//         ImGui::InputDouble("rayleighScaleHeight", &atm_params.rayleighScaleHeight, 0.1, 1.0, "%.3f");
+//         ImGui::InputDouble("mieScaleHeight", &atm_params.mieScaleHeight, 0.1, 1.0, "%.3f");
+//         ImGui::InputDouble("mieAngstromAlpha", &atm_params.mieAngstromAlpha, 0.01, 0.1, "%.3f");
+//         ImGui::InputDouble("mieAngstromBeta", &atm_params.mieAngstromBeta, 0.0001, 0.001, "%.6f");
+//         ImGui::InputDouble("mieSingleScatteringAlbedo", &atm_params.mieSingleScatteringAlbedo, 0.01, 0.1, "%.3f");
+//         ImGui::InputDouble("miePhaseFunctionG", &atm_params.miePhaseFunctionG, 0.01, 0.1, "%.3f");
+//         ImGui::InputDouble("groundAlbedo", &atm_params.groundAlbedo, 0.01, 0.1, "%.3f");
+//         ImGui::InputInt("numScatteringOrders", &atm_params.numScatteringOrders);
+//
+//         const char* luminanceOptions[] = {"None", "Approximate", "Precomputed"};
+//         int luminanceIndex = static_cast<int>(atm_params.luminance);
+//         if (ImGui::Combo("Luminance", &luminanceIndex, luminanceOptions, IM_ARRAYSIZE(luminanceOptions)))
+//             atm_params.luminance = static_cast<Sky::Atm::Luminance>(luminanceIndex);
+//
+// if (ImGui::Button("Compute model")) atm_model.initialize(atm_params);
+//     }
+//     if (ImGui::CollapsingHeader("Weather")) {
+//         ImGui::Separator();
+//         ImGui::InputFloat("maxDistance", &cloudsParams.maxDistance, 10.0, 100.0, "%.2f");
+//         ImGui::SliderFloat("Cloud coverage", &weatherParameters.cloudsCoverage, 0.f, 1.f, "%.2f");
+//
+//         ImGui::SliderFloat("Cirrus density", &weatherParameters.cirrusDensity, 0.f, 1.f, "%.2f");
+//         ImGui::SliderFloat("Alto density", &weatherParameters.altoDensity, 0.f, 1.f, "%.2f");
+//
+//         ImGui::InputFloat("Wind speed (m/s)", &weatherParameters.windSpeed, 1.0f, 2.5f, "%.2f");
+//
+//         ImGui::InputFloat("Sigma Scattering", &cloudsParams.sigmaS, 0.001f, 0.01f);
+//         ImGui::InputFloat("Sigma Absorption", &cloudsParams.sigmaA, 0.001f, 0.01f);
+//     }
+//
+//     if (ImGui::Button("Update")) {
+// sky->setCloudsParameters(cloudsParams);
+//         sky.setAtmosphereParameters(atm_params);
+//         sky.setWeather(weatherParameters, 0);
+//     }
+//
+//     ImGui::End();
+// }
 
-    if (ImGui::CollapsingHeader("Bruneton")) {
-        ImGui::Text("maxOzoneNumberDensity: %.3e", atm_params.maxOzoneNumberDensity);
-        ImGui::InputDouble("rayleigh", &atm_params.rayleigh, 0.001, 0.01, "%.15f");
-        ImGui::InputDouble("rayleighScaleHeight", &atm_params.rayleighScaleHeight, 0.1, 1.0, "%.3f");
-        ImGui::InputDouble("mieScaleHeight", &atm_params.mieScaleHeight, 0.1, 1.0, "%.3f");
-        ImGui::InputDouble("mieAngstromAlpha", &atm_params.mieAngstromAlpha, 0.01, 0.1, "%.3f");
-        ImGui::InputDouble("mieAngstromBeta", &atm_params.mieAngstromBeta, 0.0001, 0.001, "%.6f");
-        ImGui::InputDouble("mieSingleScatteringAlbedo", &atm_params.mieSingleScatteringAlbedo, 0.01, 0.1, "%.3f");
-        ImGui::InputDouble("miePhaseFunctionG", &atm_params.miePhaseFunctionG, 0.01, 0.1, "%.3f");
-        ImGui::InputDouble("groundAlbedo", &atm_params.groundAlbedo, 0.01, 0.1, "%.3f");
-        ImGui::InputInt("numScatteringOrders", &atm_params.numScatteringOrders);
+void DrawSkyDebugInfo() {
+    ImGui::Begin("SkyDebugInfo");
 
-        const char* luminanceOptions[] = {"None", "Approximate", "Precomputed"};
-        int luminanceIndex = static_cast<int>(atm_params.luminance);
-        if (ImGui::Combo("Luminance", &luminanceIndex, luminanceOptions, IM_ARRAYSIZE(luminanceOptions)))
-            atm_params.luminance = static_cast<Sky::Atm::Luminance>(luminanceIndex);
+    const Sky::SkyDebugInfo debugInfo = sky.getDebugInfo();
 
-        if (ImGui::Button("Compute model")) atm_model.initialize(atm_params);
-    }
-    if (ImGui::CollapsingHeader("Clouds")) {
-        ImGui::Separator();
-        ImGui::InputFloat("cloudLayerBottom", &cloudsParams.cloudLayerBottom, 10.0, 100.0, "%.1f");
-        ImGui::InputFloat("cloudLayerThickness", &cloudsParams.cloudLayerThickness, 10.0, 100.0, "%.1f");
-        ImGui::InputFloat("maxDistance", &cloudsParams.maxDistance, 10.0, 100.0, "%.2f");
-        ImGui::SliderFloat("Cloud coverage", &cloudsParams.coverage, 0.f, 1.f, "%.2f");
+    const float t = fmod(debugInfo.dayTime, Sky::DAY_LENGHT);
+    const int hour = static_cast<int>(t / 3600.0f);
+    const int minute = static_cast<int>((t - hour * 3600.0f) / 60.0f);
 
-        ImGui::SliderFloat("Cirrus density", &cloudsParams.cirrusDensity, 0.f, 1.f, "%.2f");
-        ImGui::SliderFloat("Alto density", &cloudsParams.altoDensity, 0.f, 1.f, "%.2f");
-
-        ImGui::InputFloat("Sigma Scattering", &cloudsParams.sigmaS, 0.001f, 0.01f);
-        ImGui::InputFloat("Sigma Absorption", &cloudsParams.sigmaA, 0.001f, 0.01f);
-
-        if (ImGui::Button("Update")) clouds_model.updateParameters(cloudsParams);
-    }
+    std::string formatted = std::format("dayTime: {} ~ {}:{} \nsunDirection: {:.3} {:.3} {:.3}\ncloudsCoverage: {}\nprecipitation: {}\nwindSpeed: "
+                                        "{}\ntransitionElapsed: {}\ntransitionDuration: {}\nisTransitioning: {}",
+        debugInfo.dayTime, hour, minute, debugInfo.sunDirection.x, debugInfo.sunDirection.y, debugInfo.sunDirection.z, debugInfo.cloudsCoverage,
+        debugInfo.precipitation, debugInfo.windSpeed * Sky::LenghtUnitInMeters, debugInfo.transitionElapsed, debugInfo.transitionDuration,
+        debugInfo.isTransitioning);
+    ImGui::Text(formatted.c_str());
 
     ImGui::End();
 }
 
 void LoadShaders() {
-    PTR_SAFE_DELETE(atm_model.clear2DShader);
-    PTR_SAFE_DELETE(atm_model.clear3DShader);
-    PTR_SAFE_DELETE(atm_model.transmittanceShader);
-    PTR_SAFE_DELETE(atm_model.directIrradianceShader);
-    PTR_SAFE_DELETE(atm_model.indirectIrradianceShader);
-    PTR_SAFE_DELETE(atm_model.multipleScatteringShader);
-    PTR_SAFE_DELETE(atm_model.scatteringDensityShader);
-    PTR_SAFE_DELETE(atm_model.singleScatteringShader);
 
-    atm_model.clear2DShader = new Gl::ComputeShader("shaders/atmosphere/clear_2d_cs.glsl");
-    atm_model.clear3DShader = new Gl::ComputeShader("shaders/atmosphere/clear_3d_cs.glsl");
-    atm_model.transmittanceShader = new Gl::ComputeShader("shaders/atmosphere/compute_transmittance_cs.glsl");
-    atm_model.directIrradianceShader = new Gl::ComputeShader("shaders/atmosphere/compute_direct_irradiance_cs.glsl");
-    atm_model.indirectIrradianceShader = new Gl::ComputeShader("shaders/atmosphere/compute_indirect_irradiance_cs.glsl");
-    atm_model.multipleScatteringShader = new Gl::ComputeShader("shaders/atmosphere/compute_multiple_scattering_cs.glsl");
-    atm_model.scatteringDensityShader = new Gl::ComputeShader("shaders/atmosphere/compute_scattering_density_cs.glsl");
-    atm_model.singleScatteringShader = new Gl::ComputeShader("shaders/atmosphere/compute_single_scattering_cs.glsl");
+    PTR_SAFE_DELETE(skyShaders.clear2DShader);
+    PTR_SAFE_DELETE(skyShaders.clear3DShader);
+    PTR_SAFE_DELETE(skyShaders.transmittanceShader);
+    PTR_SAFE_DELETE(skyShaders.directIrradianceShader);
+    PTR_SAFE_DELETE(skyShaders.indirectIrradianceShader);
+    PTR_SAFE_DELETE(skyShaders.multipleScatteringShader);
+    PTR_SAFE_DELETE(skyShaders.scatteringDensityShader);
+    PTR_SAFE_DELETE(skyShaders.singleScatteringShader);
 
-    scene.skyShader.load("shaders/ray.vert", "shaders/sky_pass.frag");
-    scene.cloudsShader.load("shaders/ray.vert", "shaders/clouds_pass.frag");
-    scene.composeShader.load("shaders/compose.vert", "shaders/compose.frag");
+    PTR_SAFE_DELETE(skyShaders.atmosphereShader);
+    PTR_SAFE_DELETE(skyShaders.cloudsShader);
+    PTR_SAFE_DELETE(skyShaders.composeShader);
+
+    skyShaders.clear2DShader = new Gl::ComputeShader("shaders/atmosphere/clear_2d_cs.glsl");
+    skyShaders.clear3DShader = new Gl::ComputeShader("shaders/atmosphere/clear_3d_cs.glsl");
+    skyShaders.transmittanceShader = new Gl::ComputeShader("shaders/atmosphere/compute_transmittance_cs.glsl");
+    skyShaders.directIrradianceShader = new Gl::ComputeShader("shaders/atmosphere/compute_direct_irradiance_cs.glsl");
+    skyShaders.indirectIrradianceShader = new Gl::ComputeShader("shaders/atmosphere/compute_indirect_irradiance_cs.glsl");
+    skyShaders.multipleScatteringShader = new Gl::ComputeShader("shaders/atmosphere/compute_multiple_scattering_cs.glsl");
+    skyShaders.scatteringDensityShader = new Gl::ComputeShader("shaders/atmosphere/compute_scattering_density_cs.glsl");
+    skyShaders.singleScatteringShader = new Gl::ComputeShader("shaders/atmosphere/compute_single_scattering_cs.glsl");
+
+    skyShaders.atmosphereShader = new Gl::Shader("shaders/ray.vert", "shaders/sky_pass.frag");
+    skyShaders.cloudsShader = new Gl::Shader("shaders/ray.vert", "shaders/clouds_pass.frag");
+    skyShaders.composeShader = new Gl::Shader("shaders/compose.vert", "shaders/compose.frag");
+
+    if (!skyShaders.baseNoiseShader) skyShaders.baseNoiseShader = new Gl::ComputeShader("shaders/clouds/base_noise.comp");
+    if (!skyShaders.detailNoiseShader) skyShaders.detailNoiseShader = new Gl::ComputeShader("shaders/clouds/detail_noise.comp");
 }
 
-void SkyPass() {
-    if (!scene.skyShader.isValid()) return;
-
-    scene.skyShader.use();
-
-    scene.skyShader.setUniform1f("uTime", scene.time);
-    const auto viewNoTrans = glm::mat4(glm::mat3(scene.camera.viewMatrix));
-    scene.skyShader.setUniformMat4fv("uView", viewNoTrans);
-    scene.skyShader.setUniformMat4fv("uProjection", scene.camera.projectionMatrix);
-    scene.skyShader.setUniform3f("uCameraPos", scene.camera.position);
-
-    scene.skyShader.setUniform3f("uSunDir", scene.sun.direction);
-    scene.skyShader.setUniform2f("uSunSize", glm::vec2(tan(Sky::SUN_ANGULAR_RADIUS), cos(Sky::SUN_ANGULAR_RADIUS)));
-
-    atm_model.bind_uniform(&scene.skyShader);
-
-    glViewport(0, 0, sky_width, sky_height);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, skyFBO);
-
-    glDepthMask(GL_FALSE);
-    glDisable(GL_CULL_FACE);
-
-    glBindVertexArray(quadVao);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glBindVertexArray(0);
-
-    glDepthMask(GL_TRUE);
-    glEnable(GL_CULL_FACE);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-void CloudsPass() {
-    if (!scene.cloudsShader.isValid()) return;
-
-    scene.cloudsShader.use();
-    scene.cloudsShader.setUniform1f("uTime", scene.time);
-    scene.cloudsShader.setUniformMat4fv("uView", scene.camera.viewMatrix);
-    scene.cloudsShader.setUniformMat4fv("uProjection", scene.camera.projectionMatrix);
-    scene.cloudsShader.setUniform3f("uCameraPos", scene.camera.position);
-    scene.cloudsShader.setUniform3f("uSunDir", scene.sun.direction);
-    scene.cloudsShader.setUniform1f("uWindSpeed", windSpeed / Sky::LenghtUnitInMeters);
-
-    clouds_model.bind(&scene.cloudsShader);
-    atm_model.bind_uniform(&scene.cloudsShader);
-
-    glViewport(0, 0, clouds_width, clouds_height);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, cloudsFBO);
-
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_CULL_FACE);
-
-    glBindVertexArray(quadVao);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glBindVertexArray(0);
-
-    glDepthMask(GL_TRUE);
-    glEnable(GL_CULL_FACE);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
-void ComposePass() {
-    scene.composeShader.use();
-
-    scene.composeShader.setUniform1f("uGamma", scene.gamma);
-    scene.composeShader.setUniform1f("uExposure", scene.exposure);
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, skyColor);
-    scene.composeShader.setUniform1i("skyTexture", 0);
-
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, cloudsColor);
-    scene.composeShader.setUniform1i("cloudsTexture", 1);
-
-    glViewport(0, 0, Input::GetWindowWidth(), Input::GetWindowHeight());
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    glDepthMask(GL_FALSE);
-    glDisable(GL_CULL_FACE);
-
-    glBindVertexArray(quadVao);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glBindVertexArray(0);
-
-    glDepthMask(GL_TRUE);
-    glEnable(GL_CULL_FACE);
-}
 void ClearPass() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glClearColor(0, 0, 0, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
-// https://www.shadertoy.com/view/lsl3RH
-float PerlinWarp(float x, float y, float shift) {
-
-    const float len = sqrt(x * x + y * y);
-    x += 0.03f * sin(0.27f * shift + len * 4.1f);
-    y += 0.03f * sin(0.23f * shift + len * 4.3f);
-
-    float ox = 0.5f + Noise::PerlinFBM(4, 0.9f * x, 0.9f * y, w_freq, 1.0f) * 0.5f;
-    float oy = 0.5f + Noise::PerlinFBM(4, 0.9f * x + 7.8f, 0.9f * y + 7.8f, w_freq, 1.0f) * 0.5f;
-
-    const float olen = sqrt(ox * ox + oy * oy);
-    ox += 0.04f * sin(0.12f * shift + olen);
-    oy += 0.04f * sin(0.14f * shift + olen);
-
-    const float nx = 0.5f + Noise::PerlinFBM(6, 3.0f * ox + 16.8f, 3.0f * oy + 16.8f, w_freq, 1.0f) * 0.5f;
-    const float ny = 0.5f + Noise::PerlinFBM(6, 3.0f * ox + 11.5f, 3.0f * oy + 11.5f, w_freq, 1.0f) * 0.5f;
-
-    const float fx = 1.8 * x + 6.0 * nx;
-    const float fy = 1.8 * y + 6.0 * ny;
-    const float f = 0.5f + Noise::PerlinFBM(4, fx, fy, w_freq, 1.0f) * 0.5f;
-
-    return std::lerp(f, f * f * f * 3.5, f * abs(nx));
-}
-
-void LoadWeatherMap() {
-    const int size = Sky::Clouds::WEATHER_MAP_SIZE;
-
-    std::vector<float> weather;
-    weather.resize(size * size * 3);
-
-    for (int x = 0; x < size; x++) {
-        for (int y = 0; y < size; y++) {
-            const float fx = (float)x / (float)size;
-            const float fy = (float)y / (float)size;
-            const int coord = (y * size + x) * 3;
-
-            const float c = PerlinWarp(fx, fy, 0);
-            const float coverage = glm::smoothstep(edge0, edge1, c);
-            // const float prec = 0.5f + Noise::PerlinFBM(3, fx, fy, w_freq, 1.0f) * 0.5f;
-            const float type = 0.5f + Noise::Perlin(fx * 6.0f, fy * 6.0f) * 0.5f;
-
-            weather[coord + 0] = coverage; // coverage
-            weather[coord + 1] = 0;        // precipitation
-            weather[coord + 2] = 1;        // cloud type
-        }
-    }
-
-    clouds_model.setWeatherMap(weather.data());
-}
-
 void ProcessKeys(double dt) {
     if (Input::IsKeyPressed(Gl::Key::GraveAccent)) Input::ToggleCursor();
-    if (Input::IsKeyPressed(Gl::Key::R)) {
-        LoadShaders();
-        LoadWeatherMap();
-    }
-    if (Input::IsKeyPressed(Gl::Key::P)) timeStop = !timeStop;
+    if (Input::IsKeyPressed(Gl::Key::R)) LoadShaders();
 
+    // presets
 
-    if (Input::IsKeyDown(Gl::Key::PageUp)) scene.speed += 100 / Sky::LenghtUnitInMeters;
-    if (Input::IsKeyDown(Gl::Key::PageDown)) scene.speed -= 100 / Sky::LenghtUnitInMeters;
+    if (Input::IsKeyPressed(Gl::Key::Num0)) sky.setWeather(Sky::Preset::Clear, Sky::WEATHER_TRANSITION_DURATION);
+    if (Input::IsKeyPressed(Gl::Key::Num1)) sky.setWeather(Sky::Preset::Clear2, Sky::WEATHER_TRANSITION_DURATION);
+    if (Input::IsKeyPressed(Gl::Key::Num2)) sky.setWeather(Sky::Preset::Cloudy, Sky::WEATHER_TRANSITION_DURATION);
+    if (Input::IsKeyPressed(Gl::Key::Num3)) sky.setWeather(Sky::Preset::Overcast, Sky::WEATHER_TRANSITION_DURATION);
+    if (Input::IsKeyPressed(Gl::Key::Num4)) sky.setWeather(Sky::Preset::Storm, Sky::WEATHER_TRANSITION_DURATION);
 
+    if (Input::IsKeyDown(Gl::Key::PageUp)) speed += 100 / Sky::LenghtUnitInMeters;
+    if (Input::IsKeyDown(Gl::Key::PageDown)) speed -= 100 / Sky::LenghtUnitInMeters;
 
-    float speed = dt * scene.speed;
-    if (Input::IsKeyDown(Gl::Key::LeftShift)) speed *= 10;
-    if (Input::IsKeyDown(Gl::Key::RightShift)) speed *= 100;
+    float speeddt = dt * speed;
+    if (Input::IsKeyDown(Gl::Key::LeftShift)) speeddt *= 10;
+    if (Input::IsKeyDown(Gl::Key::RightShift)) speeddt *= 100;
 
-    if (Input::IsKeyDown(Gl::Key::Space)) scene.camera.position += scene.camera.up * speed;
-    if (Input::IsKeyDown(Gl::Key::LeftControl)) scene.camera.position -= scene.camera.up * speed;
+    if (Input::IsKeyDown(Gl::Key::Space)) camera.position += camera.up * speeddt;
+    if (Input::IsKeyDown(Gl::Key::LeftControl)) camera.position -= camera.up * speeddt;
 
     // WASD movement
-    if (Input::IsKeyDown(Gl::Key::W)) scene.camera.position += scene.camera.forward * speed;
-    if (Input::IsKeyDown(Gl::Key::S)) scene.camera.position -= scene.camera.forward * speed;
-    glm::vec3 right = glm::normalize(glm::cross(scene.camera.forward, scene.camera.up));
-    if (Input::IsKeyDown(Gl::Key::D)) scene.camera.position += right * speed;
-    if (Input::IsKeyDown(Gl::Key::A)) scene.camera.position -= right * speed;
-
-    // if (scene.camera.position.y <= 0) scene.camera.position.y = 0.1;
-
-    // Time manipulation
-    if (Input::IsKeyDown(Gl::Key::Right)) scene.time += 50.0 * dt * TIME_SPEED;
-    if (Input::IsKeyDown(Gl::Key::Left)) scene.time -= 50.0 * dt * TIME_SPEED;
-}
-
-void InitCloud() {
-
-    clouds_model.initialize(cloudsParams);
-
-    LoadWeatherMap();
-
-    stbi_set_flip_vertically_on_load(true);
-
-    int channels, x, y;
-    unsigned char* cirrus = stbi_load("./res/cirrus.png", &x, &y, &channels, 0);
-    std::cout << std::format("cirrus.png is loaded ({0}x{1}x{2})", x, y, channels) << std::endl;
-    assert(cirrus);
-    unsigned char* alto = stbi_load("./res/alto.png", &x, &y, &channels, 0);
-    std::cout << std::format("alto.png is loaded ({0}x{1}x{2})", x, y, channels) << std::endl;
-    assert(alto);
-
-    const int res = Sky::Clouds::HIGH_CLOUDS_MAP_SIZE * Sky::Clouds::HIGH_CLOUDS_MAP_SIZE;
-    auto* combined = new uint8_t[res * 2];
-    for (int i = 0; i < res; i++) {
-        combined[i * 2 + 0] = cirrus[i]; // R = cirrus
-        combined[i * 2 + 1] = alto[i];   // G = alto
-    }
-
-    clouds_model.setHighCloudsMap(combined);
-
-    stbi_image_free(cirrus);
-    stbi_image_free(alto);
-    delete[] combined;
-
-    const Gl::ComputeShader base("./shaders/clouds/base_noise.comp");
-    const Gl::ComputeShader detail("./shaders/clouds/detail_noise.comp");
-    clouds_model.generateBaseNoise(base);
-    clouds_model.generateDetailNoise(detail);
+    if (Input::IsKeyDown(Gl::Key::W)) camera.position += camera.forward * speeddt;
+    if (Input::IsKeyDown(Gl::Key::S)) camera.position -= camera.forward * speeddt;
+    glm::vec3 right = glm::normalize(glm::cross(camera.forward, camera.up));
+    if (Input::IsKeyDown(Gl::Key::D)) camera.position += right * speeddt;
+    if (Input::IsKeyDown(Gl::Key::A)) camera.position -= right * speeddt;
 }
 
 void LoadIcon(const std::string& path) {
@@ -441,18 +247,28 @@ void LoadIcon(const std::string& path) {
     }
 }
 
-void DrawWeatherMap() {
-    ImGui::Begin("Weather");
+uint8_t* LoadHighCloudsMap() {
+    stbi_set_flip_vertically_on_load(true);
 
-    ImGui::SliderFloat("Freq", &w_freq, 0.5f, 12.0f);
-    ImGui::SliderFloat("Edge0", &edge0, 0.0f, 1.0f);
-    ImGui::SliderFloat("Edge1", &edge1, 0.0f, 1.0f);
+    int channels, x, y;
+    unsigned char* cirrus = stbi_load("./res/cirrus.png", &x, &y, &channels, 0);
+    std::cout << std::format("cirrus.png is loaded ({0}x{1}x{2})", x, y, channels) << std::endl;
+    assert(cirrus);
+    unsigned char* alto = stbi_load("./res/alto.png", &x, &y, &channels, 0);
+    std::cout << std::format("alto.png is loaded ({0}x{1}x{2})", x, y, channels) << std::endl;
+    assert(alto);
 
-    if (ImGui::SliderFloat("Precipitation", &cloudsParams.precipitation, 0.0f, 1.0f)) clouds_model.updateParameters(cloudsParams);
+    constexpr int res = Sky::Clouds::HIGH_CLOUDS_MAP_SIZE * Sky::Clouds::HIGH_CLOUDS_MAP_SIZE;
+    auto* combined = new uint8_t[res * 2];
+    for (int i = 0; i < res; i++) {
+        combined[i * 2 + 0] = cirrus[i]; // R = cirrus
+        combined[i * 2 + 1] = alto[i];   // G = alto
+    }
 
-    ImGui::Image((ImTextureID)(intptr_t)clouds_model.getWeatherMap()->getHandle(), ImVec2(Sky::Clouds::WEATHER_MAP_SIZE, Sky::Clouds::WEATHER_MAP_SIZE));
+    stbi_image_free(cirrus);
+    stbi_image_free(alto);
 
-    ImGui::End();
+    return combined;
 }
 
 int main() {
@@ -469,15 +285,10 @@ int main() {
 
     LoadShaders();
 
-    Gl::CreateQuadVO(quadVao, quadVbo);
-    Gl::CreateFrameBuffer(skyFBO, skyColor, GL_RGBA32F, GL_RGBA, sky_width, sky_height);
-    Gl::CreateFrameBuffer(cloudsFBO, cloudsColor, GL_RGBA16F, GL_RGBA, clouds_width, clouds_height);
+    sky.initialize(cloudsParams, atm_params, skyShaders, LoadHighCloudsMap());
 
-    atm_model.initialize(atm_params);
-    InitCloud();
-
-    scene.camera = Camera(0.1, 55, {0, 0, 0});
-    scene.camera.calcProjMat(render_width, render_height);
+    camera = Camera(0.1, 55, {0, 0, 0});
+    camera.calcProjMat(render_width, render_height);
 
     double lastTime = glfwGetTime();
     while (!glfwWindowShouldClose(Gl::window)) {
@@ -497,26 +308,21 @@ int main() {
         ImGui::NewFrame();
 
         // -------------- process --------------
-        if (!timeStop) scene.time += dt * TIME_SPEED;
 
         ProcessKeys(dt);
 
-        scene.camera.calcViewMat();
-        scene.camera.calcForwardMat();
+        sky.update(dt);
 
-        if (!Input::IsCursorVisible()) scene.camera.updateControls(dt);
+        camera.calcViewMat();
+        camera.calcForwardMat();
 
-        scene.sun.update(scene.time, 80); // 157
-
+        if (!Input::IsCursorVisible()) camera.updateControls(dt);
         // -------------- render --------------
 
-        SkyPass();
-        CloudsPass();
-        ComposePass();
+        sky.render(camera, 0, gamma, exposure);
         // imgui
-        DrawDebugOverlay(dt);
+        DrawSkyDebugInfo();
         DrawMetrics(dt);
-        DrawWeatherMap();
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -526,11 +332,6 @@ int main() {
         glfwSwapBuffers(Gl::window);
         glfwPollEvents();
     }
-
-
-    // ~
-    glDeleteVertexArrays(1, &quadVao);
-    glDeleteBuffers(1, &quadVbo);
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

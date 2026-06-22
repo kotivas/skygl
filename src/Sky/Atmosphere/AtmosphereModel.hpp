@@ -65,6 +65,7 @@ namespace Sky::Atm {
         void initialize(const AtmosphereParameters& params);
         void bind_uniform(Gl::Shader* shader);
         void convert_spectrum_to_linear_srgb(double& r, double& g, double& b) const;
+        void set_parameters(const AtmosphereParameters& params);
 
         Gl::ComputeShader* clear2DShader = nullptr;
         Gl::ComputeShader* clear3DShader = nullptr;
@@ -192,6 +193,8 @@ namespace Sky::Atm {
         /// (32 bits) for the precomputed textures. Half precision is sufficient for
         /// most cases, except for very high exposure values.
         bool _halfPrecision;
+
+        int _numScatteringOrders;
 
         TextureBuffer* _textureBuffer;
     };

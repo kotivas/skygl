@@ -85,5 +85,28 @@ namespace Noise {
         return result / denom;
     }
 
+    // https://www.shadertoy.com/view/lsl3RH
+    float PerlinWarp(float x, float y, float shift, float freq) {
+
+        const float len = sqrt(x * x + y * y);
+        x += 0.03f * sin(0.27f * shift + len * 4.1f);
+        y += 0.03f * sin(0.23f * shift + len * 4.3f);
+
+        float ox = 0.5f + Noise::PerlinFBM(4, 0.9f * x, 0.9f * y, freq, 1.0f) * 0.5f;
+        float oy = 0.5f + Noise::PerlinFBM(4, 0.9f * x + 7.8f, 0.9f * y + 7.8f, freq, 1.0f) * 0.5f;
+
+        const float olen = sqrt(ox * ox + oy * oy);
+        ox += 0.04f * sin(0.12f * shift + olen);
+        oy += 0.04f * sin(0.14f * shift + olen);
+
+        const float nx = 0.5f + Noise::PerlinFBM(6, 3.0f * ox + 16.8f, 3.0f * oy + 16.8f, freq, 1.0f) * 0.5f;
+        const float ny = 0.5f + Noise::PerlinFBM(6, 3.0f * ox + 11.5f, 3.0f * oy + 11.5f, freq, 1.0f) * 0.5f;
+
+        const float fx = 1.8 * x + 6.0 * nx;
+        const float fy = 1.8 * y + 6.0 * ny;
+        const float f = 0.5f + Noise::PerlinFBM(4, fx, fy, freq, 1.0f) * 0.5f;
+
+        return std::lerp(f, f * f * f * 3.5, f * abs(nx));
+    }
 
 } // namespace Noise

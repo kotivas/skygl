@@ -2,7 +2,15 @@
 #include <glm/glm.hpp>
 
 namespace Sky {
-    constexpr int DAY_LENGHT = 24 * 60 * 60; // secs
+    constexpr int ATMOSPHERE_FRAME_WIDTH = 1600;
+    constexpr int ATMOSPHERE_FRAME_HEIGHT = 900;
+    constexpr int CLOUD_FRAME_WIDTH = 800;
+    constexpr int CLOUD_FRAME_HEIGHT = 450;
+
+    constexpr int WEATHER_TRANSITION_DURATION = 30; // seconds
+
+    constexpr int DAY_LENGHT = 24 * 60 * 60; // seconds
+    constexpr int TIME_MULTIPLIER = 30;
     constexpr float SUN_ANGULAR_RADIUS = glm::radians(0.5f);
     constexpr float LenghtUnitInMeters = 1000.0; // If you use a 1:1 scale, visual bugs begin to appear when increasing the position coordinates (due to float)
 

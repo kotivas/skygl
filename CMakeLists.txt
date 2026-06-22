@@ -22,6 +22,7 @@ set(SOURCE src/main.cpp
         src/Gl/Texture.cpp
         src/Gl/UniformBuffer.cpp
         src/Noise.cpp
+        src/Sky/SkySystem.cpp
 )
 
 if (WIN32)

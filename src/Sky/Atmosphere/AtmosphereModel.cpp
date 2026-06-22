@@ -50,9 +50,7 @@ namespace Sky::Atm {
         PTR_SAFE_DELETE(singleScatteringShader);
     }
 
-    // -----------------------------------------------------------------------------------------------------------------------------------
-
-    void AtmosphereModel::initialize(const AtmosphereParameters& params) {
+    void AtmosphereModel::set_parameters(const AtmosphereParameters& params) {
         // clear prev data
         _wavelengths.clear();
         _solarIrradiance.clear();
@@ -69,6 +67,7 @@ namespace Sky::Atm {
 
         // == new
 
+        _numScatteringOrders = params.numScatteringOrders;
         _luminance = params.luminance;
         _miePhaseFunctionG = params.miePhaseFunctionG;
 
@@ -99,6 +98,13 @@ namespace Sky::Atm {
             _absorptionExtinction.push_back(params.maxOzoneNumberDensity * EARTH_OZONE_CROSS_SECTION[(l - (int)LAMBDA_MIN) / 10]); // 0 for no ozone
             _groundAlbedo.push_back(params.groundAlbedo);
         }
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------------
+
+    void AtmosphereModel::initialize(const AtmosphereParameters& params) {
+
+        set_parameters(params);
 
         // ====== precompute ======
 
@@ -108,7 +114,7 @@ namespace Sky::Atm {
         // The actual precomputations depend on whether we want to store precomputed
         // irradiance or illuminance values.
         if (num_precomputed_wavelengths() <= 3) {
-            precompute(buffer, nullptr, nullptr, false, params.numScatteringOrders);
+            precompute(buffer, nullptr, nullptr, false, _numScatteringOrders);
         } else {
             int num_iterations = (num_precomputed_wavelengths() + 2) / 3;
             double dlambda = (LAMBDA_MAX - LAMBDA_MIN) / (3.0 * num_iterations);
@@ -121,7 +127,7 @@ namespace Sky::Atm {
                     coeff(lambdas[1], 2) * dlambda, coeff(lambdas[2], 2) * dlambda};
 
                 bool blend = i > 0;
-                precompute(buffer, lambdas, luminance_from_radiance, blend, params.numScatteringOrders);
+                precompute(buffer, lambdas, luminance_from_radiance, blend, _numScatteringOrders);
             }
 
             // After the above iterations, the transmittance texture contains the
