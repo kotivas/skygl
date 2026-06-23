@@ -162,21 +162,19 @@ void DrawSkyDebugInfo() {
     ImGui::End();
 }
 
-void LoadShaders() {
-
-    PTR_SAFE_DELETE(skyShaders.clear2DShader);
-    PTR_SAFE_DELETE(skyShaders.clear3DShader);
-    PTR_SAFE_DELETE(skyShaders.transmittanceShader);
-    PTR_SAFE_DELETE(skyShaders.directIrradianceShader);
-    PTR_SAFE_DELETE(skyShaders.indirectIrradianceShader);
-    PTR_SAFE_DELETE(skyShaders.multipleScatteringShader);
-    PTR_SAFE_DELETE(skyShaders.scatteringDensityShader);
-    PTR_SAFE_DELETE(skyShaders.singleScatteringShader);
-
+void HotReload() {
     PTR_SAFE_DELETE(skyShaders.atmosphereShader);
     PTR_SAFE_DELETE(skyShaders.cloudsShader);
     PTR_SAFE_DELETE(skyShaders.composeShader);
 
+    skyShaders.atmosphereShader = new Gl::Shader("shaders/ray.vert", "shaders/sky_pass.frag");
+    skyShaders.cloudsShader = new Gl::Shader("shaders/ray.vert", "shaders/clouds_pass.frag");
+    skyShaders.composeShader = new Gl::Shader("shaders/compose.vert", "shaders/compose.frag");
+
+    sky.setShaders(skyShaders);
+}
+
+void InitialLoadShaders() {
     skyShaders.clear2DShader = new Gl::ComputeShader("shaders/atmosphere/clear_2d_cs.glsl");
     skyShaders.clear3DShader = new Gl::ComputeShader("shaders/atmosphere/clear_3d_cs.glsl");
     skyShaders.transmittanceShader = new Gl::ComputeShader("shaders/atmosphere/compute_transmittance_cs.glsl");
@@ -190,8 +188,8 @@ void LoadShaders() {
     skyShaders.cloudsShader = new Gl::Shader("shaders/ray.vert", "shaders/clouds_pass.frag");
     skyShaders.composeShader = new Gl::Shader("shaders/compose.vert", "shaders/compose.frag");
 
-    if (!skyShaders.baseNoiseShader) skyShaders.baseNoiseShader = new Gl::ComputeShader("shaders/clouds/base_noise.comp");
-    if (!skyShaders.detailNoiseShader) skyShaders.detailNoiseShader = new Gl::ComputeShader("shaders/clouds/detail_noise.comp");
+    skyShaders.baseNoiseShader = new Gl::ComputeShader("shaders/clouds/base_noise.comp");
+    skyShaders.detailNoiseShader = new Gl::ComputeShader("shaders/clouds/detail_noise.comp");
 }
 
 void ClearPass() {
@@ -202,7 +200,7 @@ void ClearPass() {
 
 void ProcessKeys(double dt) {
     if (Input::IsKeyPressed(Gl::Key::GraveAccent)) Input::ToggleCursor();
-    if (Input::IsKeyPressed(Gl::Key::R)) LoadShaders();
+    if (Input::IsKeyPressed(Gl::Key::R)) HotReload();
 
     // presets
 
@@ -283,7 +281,7 @@ int main() {
     Input::Init();
     Input::SetCursorVisible(false);
 
-    LoadShaders();
+    InitialLoadShaders();
 
     sky.initialize(cloudsParams, atm_params, skyShaders, LoadHighCloudsMap());
 

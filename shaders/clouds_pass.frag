@@ -254,12 +254,8 @@ vec4 HighAltitudeCloud(vec3 ro, vec3 rd) {
 
     vec3 pos = ro + rd * t;
     vec3 normal = normalize(pos - earth_center);
-    vec2 wind = vec2(uTime * uWindSpeed);
     float mu    = dot(rd, uSunDir);
     float phase = mix(HenyeyGreenstein(-0.1, mu), HenyeyGreenstein(0.6, mu), 0.6);
-
-    vec3 windPos = pos;
-    pos.xz * wind;
 
     vec3 trans;
     GetSkyRadiance(pos - earth_center, uSunDir, 0.0, uSunDir, trans);
@@ -270,7 +266,7 @@ vec4 HighAltitudeCloud(vec3 ro, vec3 rd) {
 
     //     === Cirrus (R) ===
 
-    float cirrusDensity = triplanar(highCloudsMap, windPos * cirrusSpeedFactor, normal, 1 / uHighCloudsScale).r;
+    float cirrusDensity = triplanar(highCloudsMap, pos + uTime * uWindSpeed * cirrusSpeedFactor, normal, 1 / uHighCloudsScale).r;
 
     if (cirrusDensity > EPS) {
         float alpha = cirrusDensity * uCirrusDensity;
@@ -279,7 +275,7 @@ vec4 HighAltitudeCloud(vec3 ro, vec3 rd) {
     }
 
     //     === Alto (G) ===
-    float altoDensity = triplanar(highCloudsMap, windPos * altoSpeedFactor, normal, 1 / uHighCloudsScale).g;
+    float altoDensity = triplanar(highCloudsMap, pos + uTime * uWindSpeed * altoSpeedFactor, normal, 1 / uHighCloudsScale).g;
 
     if (altoDensity > EPS) {
         float alpha = altoDensity * uAltoDensity;

@@ -4,7 +4,6 @@
 #include "Gl/GlUtils.hpp"
 
 /* todo
- * fix shader hot reload
  * RenderContextInfo struct
  * smooth windspeed transition
  * rescale detail and base cloud noises
@@ -31,6 +30,7 @@ namespace Sky {
 
         // --- Weather UBO ---
         _weatherUBO.create(sizeof(WeatherParameters));
+        _weatherTransition.value.windSpeed = 3 / LenghtUnitInMeters; // FIXME: Wind speed transition does not occur due to internal usage specifics
         setWeather(Preset::Cloudy, 1);
 
         setShaders(shaders);

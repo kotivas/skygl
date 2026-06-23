@@ -43,9 +43,7 @@ namespace Sky {
             value.cirrusDensity = std::lerp(from.cirrusDensity, to.cirrusDensity, t);
             value.altoDensity = std::lerp(from.altoDensity, to.altoDensity, t);
 
-            if (elapsed >= duration) {
-                running = false;
-            }
+            if (elapsed >= duration) running = false;
         }
     };
 
