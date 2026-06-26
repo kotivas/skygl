@@ -1,9 +1,15 @@
 #include "Noise.hpp"
 
+#include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 #include <glm/trigonometric.hpp>
 
 namespace Noise {
+
+    glm::vec2 hash22(glm::vec2 p) {
+        p = glm::vec2(glm::dot(p, glm::vec2(127.1f, 311.7f)), glm::dot(p, glm::vec2(269.5f, 183.3f)));
+        return glm::fract(glm::sin(p) * 43758.5453123f);
+    }
 
     // cubic interpolation
     float cubicLerp(float a0, float a1, float w) {
@@ -107,6 +113,30 @@ namespace Noise {
         const float f = 0.5f + Noise::PerlinFBM(4, fx, fy, freq, 1.0f) * 0.5f;
 
         return std::lerp(f, f * f * f * 3.5, f * abs(nx));
+    }
+
+    float WorleyF1(float x, float y, float period) {
+        glm::vec2 uv = glm::vec2(x, y);
+        glm::vec2 cell = glm::floor(uv);
+        glm::vec2 fr = glm::fract(uv);
+
+        float minDist = 1e9f;
+
+        for (int j = -1; j <= 1; j++) {
+            for (int i = -1; i <= 1; i++) {
+                glm::vec2 neighbor = glm::vec2(float(i), float(j));
+
+                // тайловая ячейка
+                glm::vec2 tiledCell;
+                tiledCell.x = std::fmod(cell.x + neighbor.x + period, period);
+                tiledCell.y = std::fmod(cell.y + neighbor.y + period, period);
+
+                glm::vec2 point = hash22(tiledCell) + neighbor;
+                float dist = glm::length(point - fr);
+                minDist = glm::min(minDist, dist);
+            }
+        }
+        return minDist;
     }
 
 } // namespace Noise

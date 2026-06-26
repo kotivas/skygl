@@ -49,11 +49,9 @@ Sky::Atm::AtmosphereParameters atm_params = {
     .numScatteringOrders = 4,
 };
 
-Sky::WeatherParameters weatherParameters = Sky::Preset::Cloudy;
-
 Sky::Clouds::CloudsParameters cloudsParams = {
     .maxDistance = 128000.f,
-    .sigmaS = 0.01f,
+    .sigmaS = 0.015f,
     .sigmaA = 0.0f,
 
     .cloudLayerThickness = Sky::Clouds::CLOUD_LAYER_THICKNESS,
@@ -71,6 +69,7 @@ Sky::SkySystem sky;
 
 constexpr int render_width = 1600;
 constexpr int render_height = 900;
+float daytime = 0;
 
 void InitImGui() {
     IMGUI_CHECKVERSION();
@@ -91,57 +90,85 @@ void DrawMetrics(double dt) {
     ImGui::End();
 }
 
-// void DrawDebugOverlay(double dt) {
-//     ImGui::Begin("Settings");
-//
-//     if (ImGui::CollapsingHeader("General")) {
-//         ImGui::InputFloat("Gamma", &gamma);
-//         ImGui::InputFloat("Sens", &camera.sensitivity);
-//         if (ImGui::SliderFloat("FOV", &camera.fov, 55, 100, "%.1f")) camera.calcProjMat(render_width, render_height);
-//         ImGui::InputFloat("Exposure", &exposure, 0.00001, 0.0001, "%.5f");
-//     }
-//
-//     if (ImGui::CollapsingHeader("Bruneton")) {
-//         ImGui::Text("maxOzoneNumberDensity: %.3e", atm_params.maxOzoneNumberDensity);
-//         ImGui::InputDouble("rayleigh", &atm_params.rayleigh, 0.001, 0.01, "%.15f");
-//         ImGui::InputDouble("rayleighScaleHeight", &atm_params.rayleighScaleHeight, 0.1, 1.0, "%.3f");
-//         ImGui::InputDouble("mieScaleHeight", &atm_params.mieScaleHeight, 0.1, 1.0, "%.3f");
-//         ImGui::InputDouble("mieAngstromAlpha", &atm_params.mieAngstromAlpha, 0.01, 0.1, "%.3f");
-//         ImGui::InputDouble("mieAngstromBeta", &atm_params.mieAngstromBeta, 0.0001, 0.001, "%.6f");
-//         ImGui::InputDouble("mieSingleScatteringAlbedo", &atm_params.mieSingleScatteringAlbedo, 0.01, 0.1, "%.3f");
-//         ImGui::InputDouble("miePhaseFunctionG", &atm_params.miePhaseFunctionG, 0.01, 0.1, "%.3f");
-//         ImGui::InputDouble("groundAlbedo", &atm_params.groundAlbedo, 0.01, 0.1, "%.3f");
-//         ImGui::InputInt("numScatteringOrders", &atm_params.numScatteringOrders);
-//
-//         const char* luminanceOptions[] = {"None", "Approximate", "Precomputed"};
-//         int luminanceIndex = static_cast<int>(atm_params.luminance);
-//         if (ImGui::Combo("Luminance", &luminanceIndex, luminanceOptions, IM_ARRAYSIZE(luminanceOptions)))
-//             atm_params.luminance = static_cast<Sky::Atm::Luminance>(luminanceIndex);
-//
-// if (ImGui::Button("Compute model")) atm_model.initialize(atm_params);
-//     }
-//     if (ImGui::CollapsingHeader("Weather")) {
-//         ImGui::Separator();
-//         ImGui::InputFloat("maxDistance", &cloudsParams.maxDistance, 10.0, 100.0, "%.2f");
-//         ImGui::SliderFloat("Cloud coverage", &weatherParameters.cloudsCoverage, 0.f, 1.f, "%.2f");
-//
-//         ImGui::SliderFloat("Cirrus density", &weatherParameters.cirrusDensity, 0.f, 1.f, "%.2f");
-//         ImGui::SliderFloat("Alto density", &weatherParameters.altoDensity, 0.f, 1.f, "%.2f");
-//
-//         ImGui::InputFloat("Wind speed (m/s)", &weatherParameters.windSpeed, 1.0f, 2.5f, "%.2f");
-//
-//         ImGui::InputFloat("Sigma Scattering", &cloudsParams.sigmaS, 0.001f, 0.01f);
-//         ImGui::InputFloat("Sigma Absorption", &cloudsParams.sigmaA, 0.001f, 0.01f);
-//     }
-//
-//     if (ImGui::Button("Update")) {
-// sky->setCloudsParameters(cloudsParams);
-//         sky.setAtmosphereParameters(atm_params);
-//         sky.setWeather(weatherParameters, 0);
-//     }
-//
-//     ImGui::End();
-// }
+void DrawSettigs() {
+    ImGui::Begin("Settings");
+
+    if (ImGui::Button("Clear")) sky.setWeather(Sky::WeatherMapPreset::ClearSky, 5);
+    ImGui::SameLine();
+    if (ImGui::Button("ScatteredClouds")) sky.setWeather(Sky::WeatherMapPreset::ScatteredClouds, 5);
+    ImGui::SameLine();
+    if (ImGui::Button("BrokenClouds")) sky.setWeather(Sky::WeatherMapPreset::BrokenClouds, 5);
+    ImGui::SameLine();
+    if (ImGui::Button("Overcast")) sky.setWeather(Sky::WeatherMapPreset::Overcast, 5);
+    ImGui::SameLine();
+    if (ImGui::Button("Storm")) sky.setWeather(Sky::WeatherMapPreset::Storm, 5);
+
+    ImGui::InputFloat("Gamma", &gamma);
+    ImGui::InputFloat("Sens", &camera.sensitivity);
+    if (ImGui::SliderFloat("FOV", &camera.fov, 55, 100, "%.1f")) camera.calcProjMat(render_width, render_height);
+    ImGui::InputFloat("Exposure", &exposure, 0.00001, 0.0001, "%.5f");
+
+    ImGui::Text("Skip time:");
+    ImGui::SameLine();
+    if (ImGui::Button("30min")) sky.addTime(1800);
+    ImGui::SameLine();
+    if (ImGui::Button("1h")) sky.addTime(3600);
+    ImGui::SameLine();
+    if (ImGui::Button("3h")) sky.addTime(10800);
+    ImGui::SameLine();
+    if (ImGui::Button("6h")) sky.addTime(21600);
+
+    ImGui::Text("Set time:");
+    ImGui::SameLine();
+    if (ImGui::Button("6AM")) sky.setTime(21600);
+    ImGui::SameLine();
+    if (ImGui::Button("12AM")) sky.setTime(43200);
+    ImGui::SameLine();
+    if (ImGui::Button("6PM")) sky.setTime(64800);
+
+    if (ImGui::CollapsingHeader("CloudsParameters")) {
+        ImGui::InputFloat("SigmaScattering", &cloudsParams.sigmaS, 0.001, 0.01);
+        ImGui::InputFloat("SigmaAbsorption", &cloudsParams.sigmaA, 0.001, 0.01);
+
+        if (ImGui::Button("Update")) sky.setCloudsParameters(cloudsParams);
+    }
+
+    if (ImGui::CollapsingHeader("Bruneton")) {
+        ImGui::Text("maxOzoneNumberDensity: %.3e", atm_params.maxOzoneNumberDensity);
+        ImGui::InputDouble("rayleigh", &atm_params.rayleigh, 0.001, 0.01, "%.15f");
+        ImGui::InputDouble("rayleighScaleHeight", &atm_params.rayleighScaleHeight, 0.1, 1.0, "%.3f");
+        ImGui::InputDouble("mieScaleHeight", &atm_params.mieScaleHeight, 0.1, 1.0, "%.3f");
+        ImGui::InputDouble("mieAngstromAlpha", &atm_params.mieAngstromAlpha, 0.01, 0.1, "%.3f");
+        ImGui::InputDouble("mieAngstromBeta", &atm_params.mieAngstromBeta, 0.0001, 0.001, "%.6f");
+        ImGui::InputDouble("mieSingleScatteringAlbedo", &atm_params.mieSingleScatteringAlbedo, 0.01, 0.1, "%.3f");
+        ImGui::InputDouble("miePhaseFunctionG", &atm_params.miePhaseFunctionG, 0.01, 0.1, "%.3f");
+        ImGui::InputDouble("groundAlbedo", &atm_params.groundAlbedo, 0.01, 0.1, "%.3f");
+        ImGui::InputInt("numScatteringOrders", &atm_params.numScatteringOrders);
+
+        const char* luminanceOptions[] = {"None", "Approximate", "Precomputed"};
+        int luminanceIndex = static_cast<int>(atm_params.luminance);
+        if (ImGui::Combo("Luminance", &luminanceIndex, luminanceOptions, IM_ARRAYSIZE(luminanceOptions)))
+            atm_params.luminance = static_cast<Sky::Atm::Luminance>(luminanceIndex);
+
+        if (ImGui::Button("Compute model")) sky.recomputeAtmosphere(atm_params);
+    }
+
+    //     if (ImGui::CollapsingHeader("Weather")) {
+    //         ImGui::Separator();
+    //         ImGui::InputFloat("maxDistance", &cloudsParams.maxDistance, 10.0, 100.0, "%.2f");
+    //         ImGui::SliderFloat("Cloud coverage", &weatherParameters.cloudsCoverage, 0.f, 1.f, "%.2f");
+    //
+    //         ImGui::SliderFloat("Cirrus density", &weatherParameters.cirrusDensity, 0.f, 1.f, "%.2f");
+    //         ImGui::SliderFloat("Alto density", &weatherParameters.altoDensity, 0.f, 1.f, "%.2f");
+    //
+    //         ImGui::InputFloat("Wind speed (m/s)", &weatherParameters.windSpeed, 1.0f, 2.5f, "%.2f");
+    //
+    //         ImGui::InputFloat("Sigma Scattering", &cloudsParams.sigmaS, 0.001f, 0.01f);
+    //         ImGui::InputFloat("Sigma Absorption", &cloudsParams.sigmaA, 0.001f, 0.01f);
+    //     }
+
+    ImGui::End();
+}
 
 void DrawSkyDebugInfo() {
     ImGui::Begin("SkyDebugInfo");
@@ -152,12 +179,14 @@ void DrawSkyDebugInfo() {
     const int hour = static_cast<int>(t / 3600.0f);
     const int minute = static_cast<int>((t - hour * 3600.0f) / 60.0f);
 
-    std::string formatted = std::format("dayTime: {} ~ {}:{} \nsunDirection: {:.3} {:.3} {:.3}\ncloudsCoverage: {}\nprecipitation: {}\nwindSpeed: "
-                                        "{}\ntransitionElapsed: {}\ntransitionDuration: {}\nisTransitioning: {}",
-        debugInfo.dayTime, hour, minute, debugInfo.sunDirection.x, debugInfo.sunDirection.y, debugInfo.sunDirection.z, debugInfo.cloudsCoverage,
-        debugInfo.precipitation, debugInfo.windSpeed * Sky::LenghtUnitInMeters, debugInfo.transitionElapsed, debugInfo.transitionDuration,
-        debugInfo.isTransitioning);
+    std::string formatted = std::format("dayTime: {} ~ {}:{} \nsunDirection: {:.3} {:.3} {:.3}\nwindSpeed: "
+                                        "{}\ntransitionDuration: {}\nisTransitioning: {}\nblendFactor: {}",
+        debugInfo.dayTime, hour, minute, debugInfo.sunDirection.x, debugInfo.sunDirection.y, debugInfo.sunDirection.z,
+        debugInfo.windSpeed * Sky::LenghtUnitInMeters, debugInfo.transitionDuration, debugInfo.isTransitioning, debugInfo.blendFactor);
     ImGui::Text(formatted.c_str());
+
+    ImGui::Image((ImTextureID)(intptr_t)sky.getCurrentWeatherMap()->getHandle(), ImVec2(256, 256));
+    ImGui::Image((ImTextureID)(intptr_t)sky.getNextWeatherMap()->getHandle(), ImVec2(256, 256));
 
     ImGui::End();
 }
@@ -203,12 +232,6 @@ void ProcessKeys(double dt) {
     if (Input::IsKeyPressed(Gl::Key::R)) HotReload();
 
     // presets
-
-    if (Input::IsKeyPressed(Gl::Key::Num0)) sky.setWeather(Sky::Preset::Clear, Sky::WEATHER_TRANSITION_DURATION);
-    if (Input::IsKeyPressed(Gl::Key::Num1)) sky.setWeather(Sky::Preset::Clear2, Sky::WEATHER_TRANSITION_DURATION);
-    if (Input::IsKeyPressed(Gl::Key::Num2)) sky.setWeather(Sky::Preset::Cloudy, Sky::WEATHER_TRANSITION_DURATION);
-    if (Input::IsKeyPressed(Gl::Key::Num3)) sky.setWeather(Sky::Preset::Overcast, Sky::WEATHER_TRANSITION_DURATION);
-    if (Input::IsKeyPressed(Gl::Key::Num4)) sky.setWeather(Sky::Preset::Storm, Sky::WEATHER_TRANSITION_DURATION);
 
     if (Input::IsKeyDown(Gl::Key::PageUp)) speed += 100 / Sky::LenghtUnitInMeters;
     if (Input::IsKeyDown(Gl::Key::PageDown)) speed -= 100 / Sky::LenghtUnitInMeters;
@@ -321,6 +344,7 @@ int main() {
         // imgui
         DrawSkyDebugInfo();
         DrawMetrics(dt);
+        DrawSettigs();
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

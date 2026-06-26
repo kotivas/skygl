@@ -8,35 +8,24 @@
 
 namespace Sky::Clouds {
 
-    CloudsModel::CloudsModel() : _baseNoise(nullptr), _detailNoise(nullptr), _weatherMap(nullptr), _highCloudsMap(nullptr) {}
+    CloudsModel::CloudsModel() : _baseNoise(nullptr), _detailNoise(nullptr), _currentWeatherMap(nullptr), _highCloudsMap(nullptr) {}
 
-    Gl::Texture* CloudsModel::getWeatherMap() const {
-        return _weatherMap;
+    Gl::Texture* CloudsModel::getCurrentWeatherMap() const {
+        return _currentWeatherMap;
     }
-    void CloudsModel::generateWeatherMap(float freq, float edge0, float edge1) const {
-        std::vector<float> weather;
-        weather.resize(WEATHER_MAP_SIZE * WEATHER_MAP_SIZE * 3);
 
-        for (int x = 0; x < WEATHER_MAP_SIZE; x++) {
-            for (int y = 0; y < WEATHER_MAP_SIZE; y++) {
-                const float fx = (float)x / (float)WEATHER_MAP_SIZE;
-                const float fy = (float)y / (float)WEATHER_MAP_SIZE;
-                const int coord = (y * WEATHER_MAP_SIZE + x) * 3;
+    Gl::Texture* CloudsModel::getNextWeatherMap() const {
+        return _nextWeatherMap;
+    }
 
-                const float c = Noise::PerlinWarp(fx, fy, 0, freq);
-                const float coverage = glm::smoothstep(edge0, edge1, c);
+    void CloudsModel::setNextWeatherMap(const float* next) const {
+        _nextWeatherMap->setData(next, _nextWeatherMap->getWidth(), _nextWeatherMap->getHeight());
+    }
 
-                // const float prec = 0.5f + Noise::PerlinFBM(3, fx, fy, w_freq, 1.0f) * 0.5f;
-                const float type = 0.5f + Noise::Perlin(fx * 8.0f, fy * 8.0f) * 0.5f;
-
-                weather[coord + 0] = coverage; // coverage
-                weather[coord + 1] = 0;        // precipitation
-                weather[coord + 2] = type;     // type
-            }
-        }
-
-        // the size of internal weather map should be generally the same as WEATHER_MAP_SIZE
-        _weatherMap->setData(weather.data(), _weatherMap->getWidth(), _weatherMap->getHeight());
+    void CloudsModel::swapWeatherMap() {
+        auto next = _nextWeatherMap;
+        _nextWeatherMap = _currentWeatherMap;
+        _currentWeatherMap = next;
     }
 
     void CloudsModel::bind(Gl::Shader* shader) const {
@@ -47,10 +36,12 @@ namespace Sky::Clouds {
         _baseNoise->bind(4);
         shader->setUniform1i("detailNoise", 5);
         _detailNoise->bind(5);
-        shader->setUniform1i("weatherMap", 6);
-        _weatherMap->bind(6);
-        shader->setUniform1i("highCloudsMap", 7);
-        _highCloudsMap->bind(7);
+        shader->setUniform1i("currentWeatherMap", 6);
+        _currentWeatherMap->bind(6);
+        shader->setUniform1i("nextWeatherMap", 7);
+        _nextWeatherMap->bind(7);
+        shader->setUniform1i("highCloudsMap", 8);
+        _highCloudsMap->bind(8);
     }
 
     void CloudsModel::updateParameters(const CloudsParameters& params) {
@@ -86,11 +77,17 @@ namespace Sky::Clouds {
          * .G - precipitation
          * .B - cloud type
          */
-        _weatherMap = new Gl::Texture();
-        _weatherMap->create(WEATHER_MAP_SIZE, WEATHER_MAP_SIZE, GL_RGB, GL_RGB16F, GL_FLOAT);
-        _weatherMap->setWrapMode(GL_REPEAT);
-        _weatherMap->setMinFilter(GL_LINEAR);
-        _weatherMap->setMagFilter(GL_LINEAR);
+        _currentWeatherMap = new Gl::Texture();
+        _currentWeatherMap->create(WEATHER_MAP_SIZE, WEATHER_MAP_SIZE, GL_RGB, GL_RGB16F, GL_FLOAT);
+        _currentWeatherMap->setWrapMode(GL_REPEAT);
+        _currentWeatherMap->setMinFilter(GL_LINEAR);
+        _currentWeatherMap->setMagFilter(GL_LINEAR);
+
+        _nextWeatherMap = new Gl::Texture();
+        _nextWeatherMap->create(WEATHER_MAP_SIZE, WEATHER_MAP_SIZE, GL_RGB, GL_RGB16F, GL_FLOAT);
+        _nextWeatherMap->setWrapMode(GL_REPEAT);
+        _nextWeatherMap->setMinFilter(GL_LINEAR);
+        _nextWeatherMap->setMagFilter(GL_LINEAR);
 
         /* High Altitude Map
          * .R - cirrus
@@ -150,7 +147,7 @@ namespace Sky::Clouds {
     }
 
     CloudsModel::~CloudsModel() {
-        PTR_SAFE_DELETE(_weatherMap);
+        PTR_SAFE_DELETE(_currentWeatherMap);
         PTR_SAFE_DELETE(_baseNoise);
         PTR_SAFE_DELETE(_detailNoise);
         PTR_SAFE_DELETE(_highCloudsMap);

@@ -7,7 +7,8 @@ in vec3 vRay;
 
 uniform sampler3D baseNoise;
 uniform sampler3D detailNoise;
-uniform sampler2D weatherMap;
+uniform sampler2D currentWeatherMap;
+uniform sampler2D nextWeatherMap;
 uniform sampler2D highCloudsMap;
 
 uniform vec3 uCameraPos;
@@ -31,18 +32,17 @@ layout (std140, binding = 1) uniform CloudsParameters {
 };
 
 layout (std140, binding = 2) uniform WeatherParameters {
-    float uPrecipitation;
-    float uCoverage;
     float uCirrusDensity;
     float uAltoDensity;
     float uWindSpeed;
+    float uWeatherMapBlend;
 };
 
 #define   CLOUD_RAY_STEPS 160
-#define   LIGHT_RAY_STEPS 8
+#define   LIGHT_RAY_STEPS 6
 
 const float fogFactor = uMaxDistance / 3.0;
-const float sigmaT = (uSigmaA + uSigmaS) * exp2(uPrecipitation);// SIGMA TRANSMITTANCE
+const float sigmaT = uSigmaA + uSigmaS;// SIGMA TRANSMITTANCE
 
 const float cirrusSpeedFactor = 3.5;
 const float altoSpeedFactor = 2.0;
@@ -75,9 +75,12 @@ float SampleDensity(vec3 pos){
 
     vec3 n = normalize(pos - earth_center);
     //     triplanar fixes 2d texture stretching on sphere
-    vec3 weather = triplanar(weatherMap, pos + uTime * uWindSpeed, n, 1/ uWeatherMapScale).rgb;
+    // ONLY USAGE OF WEATHER MAP
+    vec3 weather0 = triplanar(currentWeatherMap, pos + uTime * uWindSpeed, n, 1/ uWeatherMapScale).rgb;
+    vec3 weather1 = triplanar(nextWeatherMap, pos + uTime * uWindSpeed, n, 1/ uWeatherMapScale).rgb;
+    vec3 weather = mix(weather0, weather1, uWeatherMapBlend);
 
-    float coverage = weather.r * uCoverage;
+    float coverage = weather.r;
     float precipitation = weather.g;
     float cloudType = weather.b;
     float heightGradient = HeightGradient(heightFraction, cloudType);
@@ -101,7 +104,9 @@ float SampleDensity(vec3 pos){
     float detailFBM = dot(detailN.rgb, vec3(0.625, 0.25, 0.125));
     float detailCloud = remap(baseCloud, detailFBM * detailStrength, 1.0, 0.0, 1.0);
 
-    return saturate(detailCloud);
+    float density = pow(detailCloud, mix(1.0, 0.5, precipitation));
+
+    return saturate(density);
 }
 
 float MultipleOctaveScattering(float density, float mu) {

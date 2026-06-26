@@ -1,4 +1,6 @@
 #pragma once
+#include <vector>
+#include <glm/vec2.hpp>
 
 namespace Noise {
 
@@ -8,4 +10,8 @@ namespace Noise {
     float PerlinFBM(size_t octaves, float x, float y, float freq = 1.0, float amp = 1.0);
 
     float PerlinWarp(float x, float y, float shift, float freq);
+
+    float WorleyF1(float x, float y, float period);
+
+
 } // namespace Noise

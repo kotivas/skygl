@@ -13,38 +13,10 @@ namespace Sky {
     struct SkyDebugInfo {
         float dayTime;
         glm::vec3 sunDirection;
-
-        float cloudsCoverage;
         float windSpeed;
-        float precipitation;
-        float transitionElapsed;
+        float blendFactor;
         float transitionDuration;
         bool isTransitioning;
-    };
-
-    struct WeatherTransition {
-        WeatherParameters from;
-        WeatherParameters to;
-        WeatherParameters value;
-        float duration;
-        float elapsed;
-        bool running;
-
-        void update(double dt) {
-            if (!running) return;
-
-            elapsed += dt;
-
-            float t = std::clamp(elapsed / duration, 0.0f, 1.0f);
-            // t = easing(t)
-
-            value.cloudsCoverage = std::lerp(from.cloudsCoverage, to.cloudsCoverage, t);
-            value.precipitation = std::lerp(from.precipitation, to.precipitation, t);
-            value.cirrusDensity = std::lerp(from.cirrusDensity, to.cirrusDensity, t);
-            value.altoDensity = std::lerp(from.altoDensity, to.altoDensity, t);
-
-            if (elapsed >= duration) running = false;
-        }
     };
 
     struct SkyShaders {
@@ -65,6 +37,23 @@ namespace Sky {
         Gl::Shader* composeShader;
     };
 
+    struct WeatherTransition {
+        float duration = 1.0f;
+        float t = 0.0f;
+        bool running = false;
+
+        void update(float dt) {
+            if (!running) return;
+            t = std::min(t + dt / duration, 1.0f);
+            if (t >= 1.0f) running = false;
+        }
+
+        [[nodiscard]] float blend() const {
+            // return ease(t);
+            return t;
+        }
+    };
+
     class SkySystem {
     public:
         SkySystem();
@@ -74,11 +63,21 @@ namespace Sky {
             const SkyShaders& shaders,
             const uint8_t* highCloudsMap);
 
-        void setWeather(const WeatherParameters& params, float transitionTime);
+        void setWeather(const WeatherMapPreset& preset, float transitionTime);
         void setShaders(const SkyShaders& shaders);
-        void setAtmosphereParameters(const Atm::AtmosphereParameters& params);
+        void setCloudsParameters(const Clouds::CloudsParameters& params);
+        void setTime(float time);
+        void addTime(float time);
 
-        SkyDebugInfo getDebugInfo() const;
+        std::vector<float> generateWeatherMap(WeatherMapPreset preset);
+
+        float getTime() const;
+        Gl::Texture* getCurrentWeatherMap() const;
+        Gl::Texture* getNextWeatherMap() const;
+
+        void recomputeAtmosphere(const Atm::AtmosphereParameters& params);
+
+        [[nodiscard]] SkyDebugInfo getDebugInfo() const;
 
         // renders entire sky to the given framebuffer
         void render(const Camera& camera, uint16_t framebuffer, float gamma, float exposure);
@@ -99,6 +98,7 @@ namespace Sky {
 
         Gl::UniformBuffer _weatherUBO;
 
+        WeatherParameters _weatherParameters;
         WeatherTransition _weatherTransition;
 
         Gl::Shader* _atmosphereShader;

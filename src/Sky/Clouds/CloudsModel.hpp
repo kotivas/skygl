@@ -6,7 +6,7 @@
 namespace Sky::Clouds {
 
     struct CloudsParameters {
-        float maxDistance;   // Volumetric cloud max render distance
+        float maxDistance; // Volumetric cloud max render distance
 
         float sigmaS; // Volumetric cloud scattering factor
         float sigmaA; // Volumetric cloud absorption factor
@@ -30,7 +30,8 @@ namespace Sky::Clouds {
         void generateBaseNoise(const Gl::ComputeShader* shader) const;
         void generateDetailNoise(const Gl::ComputeShader* shader) const;
 
-        void generateWeatherMap(float freq, float edge0, float edge1) const;
+        void swapWeatherMap();
+        void setNextWeatherMap(const float* next) const;
 
         void setHighCloudsMap(const uint8_t* data) const;
 
@@ -38,7 +39,8 @@ namespace Sky::Clouds {
 
         void updateParameters(const CloudsParameters& params);
 
-        [[nodiscard]] Gl::Texture* getWeatherMap() const;
+        [[nodiscard]] Gl::Texture* getCurrentWeatherMap() const;
+        [[nodiscard]] Gl::Texture* getNextWeatherMap() const;
 
         ~CloudsModel();
 
@@ -48,7 +50,10 @@ namespace Sky::Clouds {
 
         Gl::Texture3D* _baseNoise;
         Gl::Texture3D* _detailNoise;
-        Gl::Texture* _weatherMap;
+
+        Gl::Texture* _currentWeatherMap;
+        Gl::Texture* _nextWeatherMap;
+
         Gl::Texture* _highCloudsMap;
     };
 

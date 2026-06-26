@@ -1,6 +1,7 @@
 #include "SkySystem.hpp"
 
 #include "Input.hpp"
+#include "Noise.hpp"
 #include "Gl/GlUtils.hpp"
 
 /* todo
@@ -22,18 +23,13 @@ namespace Sky {
 
         assert(highCloudsMap);
 
+        setShaders(shaders);
+
         // --- framebuffers
 
         Gl::CreateQuadVO(_quadVao, _quadVbo);
         Gl::CreateFrameBuffer(_atmosphereFBO, _atmosphereColor, GL_RGBA32F, GL_RGBA, ATMOSPHERE_FRAME_WIDTH, ATMOSPHERE_FRAME_HEIGHT);
         Gl::CreateFrameBuffer(_cloudsFBO, _cloudsColor, GL_RGBA16F, GL_RGBA, CLOUD_FRAME_WIDTH, CLOUD_FRAME_HEIGHT);
-
-        // --- Weather UBO ---
-        _weatherUBO.create(sizeof(WeatherParameters));
-        _weatherTransition.value.windSpeed = 3 / LenghtUnitInMeters; // FIXME: Wind speed transition does not occur due to internal usage specifics
-        setWeather(Preset::Cloudy, 1);
-
-        setShaders(shaders);
 
         // --- Atmosphere ---
         _atmosphereModel.initialize(atmosphere_params);
@@ -44,8 +40,16 @@ namespace Sky {
         _cloudsModel.generateBaseNoise(shaders.baseNoiseShader);
         _cloudsModel.generateDetailNoise(shaders.detailNoiseShader);
         _cloudsModel.setHighCloudsMap(highCloudsMap);
-        _cloudsModel.generateWeatherMap(2.5f, 0.1f, 1.0f); // todo public
         delete highCloudsMap;
+
+        // --- Weather UBO ---
+        _weatherUBO.create(sizeof(WeatherParameters));
+        _weatherParameters.altoDensity = 0.05f;
+        _weatherParameters.cirrusDensity = 0.05f;
+        _weatherParameters.windSpeed = 2 / LenghtUnitInMeters;
+        _weatherUBO.setData(&_weatherParameters);
+
+        setWeather(WeatherMapPreset::ScatteredClouds, 1);
     }
 
     void SkySystem::atmospherePass(const Camera& camera) {
@@ -167,16 +171,94 @@ namespace Sky {
         _composeShader = shaders.composeShader;
     }
 
-    void SkySystem::setAtmosphereParameters(const Atm::AtmosphereParameters& params) {
-        _atmosphereModel.set_parameters(params);
+    std::vector<float> SkySystem::generateWeatherMap(WeatherMapPreset preset) {
+        std::vector<float> weather;
+        weather.resize(Clouds::WEATHER_MAP_SIZE * Clouds::WEATHER_MAP_SIZE * 3);
+
+        for (int x = 0; x < Clouds::WEATHER_MAP_SIZE; x++) {
+            for (int y = 0; y < Clouds::WEATHER_MAP_SIZE; y++) {
+                const float fx = (float)x / (float)Clouds::WEATHER_MAP_SIZE;
+                const float fy = (float)y / (float)Clouds::WEATHER_MAP_SIZE;
+                const int coord = (y * Clouds::WEATHER_MAP_SIZE + x) * 3;
+
+                float coverage = 0;
+                float precipitation = 0;
+                float cloudtype = 0;
+
+                switch (preset) {
+
+                case WeatherMapPreset::ClearSky: {
+                    break;
+                }
+                case WeatherMapPreset::ScatteredClouds: {
+                    float coverage_worley = 1.0f - Noise::WorleyF1(fx * 24, fy * 24, 24);
+                    float coverage_perlin = Noise::PerlinFBM(3, fx, fy, 16) * 0.5f + 0.5f;
+
+                    coverage = coverage_perlin * glm::smoothstep(0.0f, 0.9f, coverage_worley);
+                    cloudtype = glm::mix(0.0f, 0.6f, glm::smoothstep(0.1f, 0.9f, coverage));
+                    cloudtype = coverage < 0.1 ? 0.0 : cloudtype;
+                    precipitation = 0;
+                    break;
+                }
+                case WeatherMapPreset::BrokenClouds: {
+                    break;
+                }
+                case WeatherMapPreset::Overcast: {
+                    coverage = Noise::PerlinFBM(3, fx, fy, 16) * 0.5f + 0.5f;
+                    precipitation = 0.3;
+                    cloudtype = 0.8;
+                    break;
+                }
+                case WeatherMapPreset::Storm: {
+                    break;
+                }
+                }
+
+                weather[coord + 0] = coverage;      // coverage
+                weather[coord + 1] = precipitation; // precipitation
+                weather[coord + 2] = cloudtype;     // type
+            }
+        }
+
+        return weather;
     }
 
-    void SkySystem::setWeather(const WeatherParameters& params, float transitionTime) {
-        _weatherTransition.from = _weatherTransition.value;
-        _weatherTransition.to = params;
-        _weatherTransition.to.windSpeed /= LenghtUnitInMeters;
+    void SkySystem::setTime(float time) {
+        _dayTime = time;
+    }
+
+    void SkySystem::addTime(float time) {
+        _dayTime += time;
+    }
+
+    float SkySystem::getTime() const {
+        return _dayTime;
+    }
+
+    Gl::Texture* SkySystem::getCurrentWeatherMap() const {
+        return _cloudsModel.getCurrentWeatherMap();
+    }
+
+    Gl::Texture* SkySystem::getNextWeatherMap() const {
+        return _cloudsModel.getNextWeatherMap();
+    }
+
+    void SkySystem::setCloudsParameters(const Clouds::CloudsParameters& params) {
+        _cloudsModel.updateParameters(params);
+    }
+
+    void SkySystem::recomputeAtmosphere(const Atm::AtmosphereParameters& params) {
+        _atmosphereModel.initialize(params);
+    }
+
+    void SkySystem::setWeather(const WeatherMapPreset& params, float transitionTime) {
+        _cloudsModel.swapWeatherMap();
+
+        std::vector<float> weather = generateWeatherMap(params);
+        _cloudsModel.setNextWeatherMap(weather.data());
+
         _weatherTransition.duration = transitionTime;
-        _weatherTransition.elapsed = 0.0f;
+        _weatherTransition.t = 0.0f;
         _weatherTransition.running = true;
     }
 
@@ -184,12 +266,9 @@ namespace Sky {
         SkyDebugInfo debugInfo;
         debugInfo.dayTime = _dayTime;
         debugInfo.sunDirection = _sun.direction;
-        debugInfo.cloudsCoverage = _weatherTransition.value.cloudsCoverage;
-        debugInfo.transitionElapsed = _weatherTransition.elapsed;
+        debugInfo.blendFactor = _weatherTransition.blend();
         debugInfo.transitionDuration = _weatherTransition.duration;
         debugInfo.isTransitioning = _weatherTransition.running;
-        debugInfo.windSpeed = _weatherTransition.value.windSpeed;
-        debugInfo.precipitation = _weatherTransition.value.precipitation;
 
         return debugInfo;
     }
@@ -198,7 +277,10 @@ namespace Sky {
         _dayTime += dt * TIME_MULTIPLIER;
 
         _weatherTransition.update(dt);
-        if (_weatherTransition.running) _weatherUBO.setData(&_weatherTransition.value);
+        if (_weatherTransition.running) {
+            _weatherParameters.weatherMapBlend = _weatherTransition.blend();
+            _weatherUBO.setData(&_weatherParameters);
+        }
 
         _sun.update(_dayTime, 80); // 157
     }
