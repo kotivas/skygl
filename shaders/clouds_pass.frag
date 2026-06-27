@@ -38,7 +38,7 @@ layout (std140, binding = 2) uniform WeatherParameters {
     float uWeatherMapBlend;
 };
 
-#define   CLOUD_RAY_STEPS 160
+#define   CLOUD_RAY_STEPS 180
 #define   LIGHT_RAY_STEPS 6
 
 const float fogFactor = uMaxDistance / 3.0;
@@ -75,7 +75,6 @@ float SampleDensity(vec3 pos){
 
     vec3 n = normalize(pos - earth_center);
     //     triplanar fixes 2d texture stretching on sphere
-    // ONLY USAGE OF WEATHER MAP
     vec3 weather0 = triplanar(currentWeatherMap, pos + uTime * uWindSpeed, n, 1/ uWeatherMapScale).rgb;
     vec3 weather1 = triplanar(nextWeatherMap, pos + uTime * uWindSpeed, n, 1/ uWeatherMapScale).rgb;
     vec3 weather = mix(weather0, weather1, uWeatherMapBlend);
@@ -111,7 +110,7 @@ float SampleDensity(vec3 pos){
 
 float MultipleOctaveScattering(float density, float mu) {
     float attenuation      = 0.3;
-    float contribution     = 0.5;
+    float contribution     = 0.7;
     float phaseAttenuation = 0.5;
 
     const float scatteringOctaves = 4.0;
@@ -168,7 +167,7 @@ float ComputeLightVisibility(vec3 pos, vec3 lightDir, float mu) {
     if (!IntersectCloudLayer(pos, lightDir, tLightEnter, tLightExit)) return 0;
 
     float dt = tLightExit / float(LIGHT_RAY_STEPS);
-    dt *= max(abs(dot(lightDir, vec3(0, 1, 0))), 0.1);
+    // dt *= max(abs(dot(lightDir, vec3(0, 1, 0))), 0.1);
     float d = 0.0;
 
     for (int i = 0; i < LIGHT_RAY_STEPS; ++i) {
@@ -176,10 +175,7 @@ float ComputeLightVisibility(vec3 pos, vec3 lightDir, float mu) {
     }
     d *= dt;
 
-    float beersLaw = MultipleOctaveScattering(d, mu);
-    float powder = 1.0 - exp(-d * 2.0 * sigmaT);
-
-    return beersLaw * mix(1.0, powder * 2.0, 0.5 - 0.5 * mu);
+    return MultipleOctaveScattering(d, mu);
 }
 
 
@@ -221,7 +217,7 @@ vec4 RaymarchVolumetricCloud(vec3 ro, vec3 rd) {
             float vis = ComputeLightVisibility(pos, uSunDir, mu);
 
             float heightFraction = (length(pos - earth_center) - bottom_radius - uCloudLayerBottom) / uCloudLayerThickness;
-            vec3 heightAmbient = mix(skyLight*0.1, skyLight*2, heightFraction);
+            vec3 heightAmbient = mix(skyLight*0.5, skyLight, heightFraction);
 
             vec3 inscatter = (sunLight * vis + heightAmbient) * sampleSigmaS;
 
@@ -241,7 +237,7 @@ vec4 RaymarchVolumetricCloud(vec3 ro, vec3 rd) {
     }
 
     // Convert transmittance to alpha
-    float alpha = 1.0 - dot(totalTransmittance, vec3(1.0 / 3.0));
+   float alpha = 1.0 - dot(totalTransmittance, vec3(0.2126, 0.7152, 0.0722));
 
     float fog = exp(-horizDist / fogFactor);// ! hack probably should use bruneton transmittance
 

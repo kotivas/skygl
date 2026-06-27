@@ -188,19 +188,26 @@ namespace Sky {
                 switch (preset) {
 
                 case WeatherMapPreset::ClearSky: {
+                    coverage = 0.f;
+                    cloudtype = 0.f;
+                    precipitation = 0.f;
                     break;
                 }
                 case WeatherMapPreset::ScatteredClouds: {
-                    float coverage_worley = 1.0f - Noise::WorleyF1(fx * 24, fy * 24, 24);
-                    float coverage_perlin = Noise::PerlinFBM(3, fx, fy, 16) * 0.5f + 0.5f;
-
-                    coverage = coverage_perlin * glm::smoothstep(0.0f, 0.9f, coverage_worley);
-                    cloudtype = glm::mix(0.0f, 0.6f, glm::smoothstep(0.1f, 0.9f, coverage));
-                    cloudtype = coverage < 0.1 ? 0.0 : cloudtype;
+                    float coverage_perlin = Noise::PerlinFBM(3, fx, fy, 24) * 0.5f + 0.5f;
+                    coverage = glm::smoothstep(0.45f, 0.8f, coverage_perlin);
+                    cloudtype = 0.1f;
                     precipitation = 0;
                     break;
                 }
                 case WeatherMapPreset::BrokenClouds: {
+                    float coverage_worley = 1.0f - Noise::WorleyF1(fx * 32, fy * 32, 32);
+                    float coverage_perlin = Noise::PerlinFBM(3, fx, fy, 16) * 0.5f + 0.5f;
+                    coverage = coverage_perlin * glm::smoothstep(0.0f, 0.9f, coverage_worley);
+
+                    cloudtype = glm::mix(0.0f, 0.6f, glm::smoothstep(0.1f, 0.4f, coverage)) * coverage_worley;
+                    cloudtype = coverage < 0.1 ? 0.0 : cloudtype;
+                    precipitation = 0;
                     break;
                 }
                 case WeatherMapPreset::Overcast: {
@@ -210,6 +217,9 @@ namespace Sky {
                     break;
                 }
                 case WeatherMapPreset::Storm: {
+                    coverage = Noise::PerlinFBM(3, fx, fy, 16) * 0.5f + 0.5f;
+                    precipitation = Noise::PerlinFBM(2, fx, fy, 8) * 0.5f + 0.5f;
+                    cloudtype = 1.0;
                     break;
                 }
                 }

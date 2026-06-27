@@ -51,7 +51,7 @@ Sky::Atm::AtmosphereParameters atm_params = {
 
 Sky::Clouds::CloudsParameters cloudsParams = {
     .maxDistance = 128000.f,
-    .sigmaS = 0.015f,
+    .sigmaS = 0.02f,
     .sigmaA = 0.0f,
 
     .cloudLayerThickness = Sky::Clouds::CLOUD_LAYER_THICKNESS,
@@ -60,7 +60,7 @@ Sky::Clouds::CloudsParameters cloudsParams = {
 
     .highCloudsScale = 32 * 1000.0,
     .weatherMapScale = 128 * 1000.0,
-    .baseNoiseScale = 24 * 1000.0,
+    .baseNoiseScale = 25 * 1000.0,
     .detailNoiseScale = 1.5 * 1000.0,
 };
 
@@ -93,15 +93,15 @@ void DrawMetrics(double dt) {
 void DrawSettigs() {
     ImGui::Begin("Settings");
 
-    if (ImGui::Button("Clear")) sky.setWeather(Sky::WeatherMapPreset::ClearSky, 5);
+    if (ImGui::Button("Clear")) sky.setWeather(Sky::WeatherMapPreset::ClearSky, Sky::WEATHER_TRANSITION_DURATION);
     ImGui::SameLine();
-    if (ImGui::Button("ScatteredClouds")) sky.setWeather(Sky::WeatherMapPreset::ScatteredClouds, 5);
+    if (ImGui::Button("ScatteredClouds")) sky.setWeather(Sky::WeatherMapPreset::ScatteredClouds, Sky::WEATHER_TRANSITION_DURATION);
     ImGui::SameLine();
-    if (ImGui::Button("BrokenClouds")) sky.setWeather(Sky::WeatherMapPreset::BrokenClouds, 5);
+    if (ImGui::Button("BrokenClouds")) sky.setWeather(Sky::WeatherMapPreset::BrokenClouds, Sky::WEATHER_TRANSITION_DURATION);
     ImGui::SameLine();
-    if (ImGui::Button("Overcast")) sky.setWeather(Sky::WeatherMapPreset::Overcast, 5);
+    if (ImGui::Button("Overcast")) sky.setWeather(Sky::WeatherMapPreset::Overcast, Sky::WEATHER_TRANSITION_DURATION);
     ImGui::SameLine();
-    if (ImGui::Button("Storm")) sky.setWeather(Sky::WeatherMapPreset::Storm, 5);
+    if (ImGui::Button("Storm")) sky.setWeather(Sky::WeatherMapPreset::Storm, Sky::WEATHER_TRANSITION_DURATION);
 
     ImGui::InputFloat("Gamma", &gamma);
     ImGui::InputFloat("Sens", &camera.sensitivity);
@@ -129,6 +129,12 @@ void DrawSettigs() {
     if (ImGui::CollapsingHeader("CloudsParameters")) {
         ImGui::InputFloat("SigmaScattering", &cloudsParams.sigmaS, 0.001, 0.01);
         ImGui::InputFloat("SigmaAbsorption", &cloudsParams.sigmaA, 0.001, 0.01);
+        ImGui::InputFloat("BaseNoiseScale", &cloudsParams.baseNoiseScale);
+        ImGui::InputFloat("DetailNoiseScale", &cloudsParams.detailNoiseScale);
+
+        ImGui::InputFloat("CloudLayerThickness", &cloudsParams.cloudLayerThickness);
+        ImGui::InputFloat("CloudLayerBottom", &cloudsParams.cloudLayerBottom);
+        ImGui::InputFloat("HighCloudsHeight", &cloudsParams.highCloudsHeight);
 
         if (ImGui::Button("Update")) sky.setCloudsParameters(cloudsParams);
     }
