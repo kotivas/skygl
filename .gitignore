@@ -1,6 +1,8 @@
 build
 imgui.ini
-
+out
 .clang-format
-.devnotes.md
+.CMakeSettings.json
 .idea
+.vs
+/CMakeSettings.json
