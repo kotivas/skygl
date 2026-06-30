@@ -3,18 +3,13 @@
 #include "Input.hpp"
 #include "Noise.hpp"
 #include "Gl/GlUtils.hpp"
-
-/* todo
- * RenderContextInfo struct
- * smooth windspeed transition
- * rescale detail and base cloud noises
- */
+#include "../Utils.hpp"
 
 namespace Sky {
 
     SkySystem::SkySystem() :
         _atmosphereShader(nullptr), _cloudsShader(nullptr), _composeShader(nullptr), _atmosphereFBO(0), _atmosphereColor(0), _cloudsFBO(0), _cloudsColor(0),
-        _quadVao(0), _quadVbo(0), _dayTime(43200) {}
+        _quadVao(0), _quadVbo(0), _dayTime(43200), _rng(std::chrono::high_resolution_clock::now().time_since_epoch().count()) {}
 
     void SkySystem::initialize(const Clouds::CloudsParameters& clouds_params,
         const Atm::AtmosphereParameters& atmosphere_params,
@@ -49,7 +44,7 @@ namespace Sky {
         _weatherParameters.windSpeed = 2 / LenghtUnitInMeters;
         _weatherUBO.setData(&_weatherParameters);
 
-        setWeather(WeatherMapPreset::ScatteredClouds, 1);
+        setWeather(WeatherType::Scattered, 1);
     }
 
     void SkySystem::atmospherePass(const Camera& camera) {
@@ -171,68 +166,6 @@ namespace Sky {
         _composeShader = shaders.composeShader;
     }
 
-    std::vector<float> SkySystem::generateWeatherMap(WeatherMapPreset preset) {
-        std::vector<float> weather;
-        weather.resize(Clouds::WEATHER_MAP_SIZE * Clouds::WEATHER_MAP_SIZE * 3);
-
-        for (int x = 0; x < Clouds::WEATHER_MAP_SIZE; x++) {
-            for (int y = 0; y < Clouds::WEATHER_MAP_SIZE; y++) {
-                const float fx = (float)x / (float)Clouds::WEATHER_MAP_SIZE;
-                const float fy = (float)y / (float)Clouds::WEATHER_MAP_SIZE;
-                const int coord = (y * Clouds::WEATHER_MAP_SIZE + x) * 3;
-
-                float coverage = 0;
-                float precipitation = 0;
-                float cloudtype = 0;
-
-                switch (preset) {
-
-                case WeatherMapPreset::ClearSky: {
-                    coverage = 0.f;
-                    cloudtype = 0.f;
-                    precipitation = 0.f;
-                    break;
-                }
-                case WeatherMapPreset::ScatteredClouds: {
-                    float coverage_perlin = Noise::PerlinFBM(3, fx, fy, 24) * 0.5f + 0.5f;
-                    coverage = glm::smoothstep(0.45f, 0.8f, coverage_perlin);
-                    cloudtype = 0.1f;
-                    precipitation = 0;
-                    break;
-                }
-                case WeatherMapPreset::BrokenClouds: {
-                    float coverage_worley = 1.0f - Noise::WorleyF1(fx * 32, fy * 32, 32);
-                    float coverage_perlin = Noise::PerlinFBM(3, fx, fy, 16) * 0.5f + 0.5f;
-                    coverage = coverage_perlin * glm::smoothstep(0.0f, 0.9f, coverage_worley);
-
-                    cloudtype = glm::mix(0.0f, 0.6f, glm::smoothstep(0.1f, 0.4f, coverage)) * coverage_worley;
-                    cloudtype = coverage < 0.1 ? 0.0 : cloudtype;
-                    precipitation = 0;
-                    break;
-                }
-                case WeatherMapPreset::Overcast: {
-                    coverage = Noise::PerlinFBM(3, fx, fy, 16) * 0.5f + 0.5f;
-                    precipitation = 0.3;
-                    cloudtype = 0.8;
-                    break;
-                }
-                case WeatherMapPreset::Storm: {
-                    coverage = Noise::PerlinFBM(3, fx, fy, 16) * 0.5f + 0.5f;
-                    precipitation = Noise::PerlinFBM(2, fx, fy, 8) * 0.5f + 0.5f;
-                    cloudtype = 1.0;
-                    break;
-                }
-                }
-
-                weather[coord + 0] = coverage;      // coverage
-                weather[coord + 1] = precipitation; // precipitation
-                weather[coord + 2] = cloudtype;     // type
-            }
-        }
-
-        return weather;
-    }
-
     void SkySystem::setTime(float time) {
         _dayTime = time;
     }
@@ -261,22 +194,77 @@ namespace Sky {
         _atmosphereModel.initialize(params);
     }
 
-    void SkySystem::setWeather(const WeatherMapPreset& params, float transitionTime) {
+    WeatherType SkySystem::pickNextWeather() const {
+        auto it = WeatherGraph.find(_currentWeather);
+        if (it == WeatherGraph.end() || it->second.empty()) return _currentWeather; // нет правил для текущего состояния — остаёмся как есть
+
+        const std::vector<std::pair<WeatherType, float>>& candidates = it->second;
+
+        float totalWeight = 0.0f;
+        for (const auto& [type, weight] : candidates) totalWeight += weight;
+
+        std::uniform_real_distribution<float> dist(0.0f, totalWeight);
+        float roll = dist(_rng);
+
+        float accumulated = 0.0f;
+        for (const auto& [type, weight] : candidates) {
+            accumulated += weight;
+            if (roll <= accumulated) return type;
+        }
+        return candidates.back().first; // fallback
+    }
+
+
+    void SkySystem::setWeather(const WeatherType& preset, float transitionTime) {
         _cloudsModel.swapWeatherMap();
 
-        std::vector<float> weather = generateWeatherMap(params);
+        _currentWeather = preset;
+
+        WeatherParameters new_params;
+        new_params.weatherMapBlend = 0.0f;
+        new_params.windSpeed = 2.0f / LenghtUnitInMeters;
+        std::vector<float> weather;
+
+        switch (preset) {
+        case WeatherType::Clear:
+            new_params.altoDensity = 0.05f;
+            new_params.cirrusDensity = 0.05f;
+            weather = WeatherMapGenerator::GenClearSky();
+            break;
+        case WeatherType::Scattered:
+            new_params.altoDensity = 0.05f;
+            new_params.cirrusDensity = 0.05f;
+            weather = WeatherMapGenerator::GenScatteredClouds(_dayTime);
+            break;
+        case WeatherType::Broken:
+            new_params.altoDensity = 0.05f;
+            new_params.cirrusDensity = 0.05f;
+            weather = WeatherMapGenerator::GenBrokenClouds(_dayTime);
+            break;
+        case WeatherType::Overcast:
+            new_params.altoDensity = 0.05f;
+            new_params.cirrusDensity = 0.05f;
+            weather = WeatherMapGenerator::GenOvercast(_dayTime);
+            break;
+        case WeatherType::Storm:
+            new_params.altoDensity = 0.05f;
+            new_params.cirrusDensity = 0.05f;
+            weather = WeatherMapGenerator::GenStorm(_dayTime);
+            break;
+        };
+
+
+        // std::vector<float> weather = generateWeatherMap(params);
         _cloudsModel.setNextWeatherMap(weather.data());
 
-        _weatherTransition.duration = transitionTime;
-        _weatherTransition.t = 0.0f;
-        _weatherTransition.running = true;
+        _weatherTransition.start(_weatherParameters, new_params, transitionTime);
     }
 
     SkyDebugInfo SkySystem::getDebugInfo() const {
         SkyDebugInfo debugInfo;
         debugInfo.dayTime = _dayTime;
         debugInfo.sunDirection = _sun.direction;
-        debugInfo.blendFactor = _weatherTransition.blend();
+        debugInfo.blendFactor = _weatherTransition.current().weatherMapBlend;
         debugInfo.transitionDuration = _weatherTransition.duration;
         debugInfo.isTransitioning = _weatherTransition.running;
 
@@ -288,8 +276,10 @@ namespace Sky {
 
         _weatherTransition.update(dt);
         if (_weatherTransition.running) {
-            _weatherParameters.weatherMapBlend = _weatherTransition.blend();
+            _weatherParameters = _weatherTransition.current();
             _weatherUBO.setData(&_weatherParameters);
+        } else {
+            setWeather(pickNextWeather(), 30);
         }
 
         _sun.update(_dayTime, 80); // 157

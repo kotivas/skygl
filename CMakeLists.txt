@@ -23,7 +23,7 @@ set(SOURCE src/main.cpp
         src/Gl/UniformBuffer.cpp
         src/Noise.cpp
         src/Sky/SkySystem.cpp
-)
+ "src/Sky/Weather.cpp")
 
 if (WIN32)
     list(APPEND SOURCES res/resource.rc)

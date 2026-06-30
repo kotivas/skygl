@@ -51,7 +51,7 @@ Sky::Atm::AtmosphereParameters atm_params = {
 
 Sky::Clouds::CloudsParameters cloudsParams = {
     .maxDistance = 128000.f,
-    .sigmaS = 0.02f,
+    .sigmaS = 0.01f,
     .sigmaA = 0.0f,
 
     .cloudLayerThickness = Sky::Clouds::CLOUD_LAYER_THICKNESS,
@@ -93,15 +93,15 @@ void DrawMetrics(double dt) {
 void DrawSettigs() {
     ImGui::Begin("Settings");
 
-    if (ImGui::Button("Clear")) sky.setWeather(Sky::WeatherMapPreset::ClearSky, Sky::WEATHER_TRANSITION_DURATION);
+    if (ImGui::Button("Clear")) sky.setWeather(Sky::WeatherType::Clear, Sky::WEATHER_TRANSITION_DURATION);
     ImGui::SameLine();
-    if (ImGui::Button("ScatteredClouds")) sky.setWeather(Sky::WeatherMapPreset::ScatteredClouds, Sky::WEATHER_TRANSITION_DURATION);
+    if (ImGui::Button("ScatteredClouds")) sky.setWeather(Sky::WeatherType::Scattered, Sky::WEATHER_TRANSITION_DURATION);
     ImGui::SameLine();
-    if (ImGui::Button("BrokenClouds")) sky.setWeather(Sky::WeatherMapPreset::BrokenClouds, Sky::WEATHER_TRANSITION_DURATION);
+    if (ImGui::Button("BrokenClouds")) sky.setWeather(Sky::WeatherType::Broken, Sky::WEATHER_TRANSITION_DURATION);
     ImGui::SameLine();
-    if (ImGui::Button("Overcast")) sky.setWeather(Sky::WeatherMapPreset::Overcast, Sky::WEATHER_TRANSITION_DURATION);
+    if (ImGui::Button("Overcast")) sky.setWeather(Sky::WeatherType::Overcast, Sky::WEATHER_TRANSITION_DURATION);
     ImGui::SameLine();
-    if (ImGui::Button("Storm")) sky.setWeather(Sky::WeatherMapPreset::Storm, Sky::WEATHER_TRANSITION_DURATION);
+    if (ImGui::Button("Storm")) sky.setWeather(Sky::WeatherType::Storm, Sky::WEATHER_TRANSITION_DURATION);
 
     ImGui::InputFloat("Gamma", &gamma);
     ImGui::InputFloat("Sens", &camera.sensitivity);
@@ -158,20 +158,6 @@ void DrawSettigs() {
 
         if (ImGui::Button("Compute model")) sky.recomputeAtmosphere(atm_params);
     }
-
-    //     if (ImGui::CollapsingHeader("Weather")) {
-    //         ImGui::Separator();
-    //         ImGui::InputFloat("maxDistance", &cloudsParams.maxDistance, 10.0, 100.0, "%.2f");
-    //         ImGui::SliderFloat("Cloud coverage", &weatherParameters.cloudsCoverage, 0.f, 1.f, "%.2f");
-    //
-    //         ImGui::SliderFloat("Cirrus density", &weatherParameters.cirrusDensity, 0.f, 1.f, "%.2f");
-    //         ImGui::SliderFloat("Alto density", &weatherParameters.altoDensity, 0.f, 1.f, "%.2f");
-    //
-    //         ImGui::InputFloat("Wind speed (m/s)", &weatherParameters.windSpeed, 1.0f, 2.5f, "%.2f");
-    //
-    //         ImGui::InputFloat("Sigma Scattering", &cloudsParams.sigmaS, 0.001f, 0.01f);
-    //         ImGui::InputFloat("Sigma Absorption", &cloudsParams.sigmaA, 0.001f, 0.01f);
-    //     }
 
     ImGui::End();
 }

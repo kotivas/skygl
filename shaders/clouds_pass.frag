@@ -41,7 +41,7 @@ layout (std140, binding = 2) uniform WeatherParameters {
 #define   CLOUD_RAY_STEPS 180
 #define   LIGHT_RAY_STEPS 6
 
-const float fogFactor = uMaxDistance / 3.0;
+const float fogFactor = uMaxDistance / 4.0;
 const float sigmaT = uSigmaA + uSigmaS;// SIGMA TRANSMITTANCE
 
 const float cirrusSpeedFactor = 3.5;
@@ -110,7 +110,7 @@ float SampleDensity(vec3 pos){
 
 float MultipleOctaveScattering(float density, float mu) {
     float attenuation      = 0.3;
-    float contribution     = 0.7;
+    float contribution     = 0.6;
     float phaseAttenuation = 0.5;
 
     const float scatteringOctaves = 4.0;
@@ -217,7 +217,7 @@ vec4 RaymarchVolumetricCloud(vec3 ro, vec3 rd) {
             float vis = ComputeLightVisibility(pos, uSunDir, mu);
 
             float heightFraction = (length(pos - earth_center) - bottom_radius - uCloudLayerBottom) / uCloudLayerThickness;
-            vec3 heightAmbient = mix(skyLight*0.5, skyLight, heightFraction);
+            vec3 heightAmbient = mix(skyLight, skyLight, heightFraction); // disabled
 
             vec3 inscatter = (sunLight * vis + heightAmbient) * sampleSigmaS;
 
