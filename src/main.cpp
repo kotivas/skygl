@@ -93,15 +93,15 @@ void DrawMetrics(double dt) {
 void DrawSettigs() {
     ImGui::Begin("Settings");
 
-    if (ImGui::Button("Clear")) sky.setWeather(Sky::WeatherType::Clear, Sky::WEATHER_TRANSITION_DURATION);
+    if (ImGui::Button("Clear")) sky.setWeather(Sky::WeatherType::Clear, 5);
     ImGui::SameLine();
-    if (ImGui::Button("ScatteredClouds")) sky.setWeather(Sky::WeatherType::Scattered, Sky::WEATHER_TRANSITION_DURATION);
+    if (ImGui::Button("ScatteredClouds")) sky.setWeather(Sky::WeatherType::Scattered, 5);
     ImGui::SameLine();
-    if (ImGui::Button("BrokenClouds")) sky.setWeather(Sky::WeatherType::Broken, Sky::WEATHER_TRANSITION_DURATION);
+    if (ImGui::Button("BrokenClouds")) sky.setWeather(Sky::WeatherType::Broken, 5);
     ImGui::SameLine();
-    if (ImGui::Button("Overcast")) sky.setWeather(Sky::WeatherType::Overcast, Sky::WEATHER_TRANSITION_DURATION);
+    if (ImGui::Button("Overcast")) sky.setWeather(Sky::WeatherType::Overcast, 5);
     ImGui::SameLine();
-    if (ImGui::Button("Storm")) sky.setWeather(Sky::WeatherType::Storm, Sky::WEATHER_TRANSITION_DURATION);
+    if (ImGui::Button("Storm")) sky.setWeather(Sky::WeatherType::Storm, 5);
 
     ImGui::InputFloat("Gamma", &gamma);
     ImGui::InputFloat("Sens", &camera.sensitivity);

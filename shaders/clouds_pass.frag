@@ -38,10 +38,10 @@ layout (std140, binding = 2) uniform WeatherParameters {
     float uWeatherMapBlend;
 };
 
-#define   CLOUD_RAY_STEPS 180
-#define   LIGHT_RAY_STEPS 6
+#define   CLOUD_RAY_STEPS 160
+#define   LIGHT_RAY_STEPS 16
 
-const float fogFactor = uMaxDistance / 4.0;
+const float fogFactor = uMaxDistance / 3.0;
 const float sigmaT = uSigmaA + uSigmaS;// SIGMA TRANSMITTANCE
 
 const float cirrusSpeedFactor = 3.5;
@@ -95,7 +95,7 @@ float SampleDensity(vec3 pos){
     baseCloud *= coverage;
     baseCloud *= heightGradient;
 
-    if (baseCloud < 0) return 0;
+    if (baseCloud < 0.0) return 0.0;
 
     // === details ===
     vec3 detail_uv = pos / uDetailNoiseScale + uTime * uWindSpeed / uDetailNoiseScale;
@@ -109,9 +109,9 @@ float SampleDensity(vec3 pos){
 }
 
 float MultipleOctaveScattering(float density, float mu) {
-    float attenuation      = 0.3;
-    float contribution     = 0.6;
-    float phaseAttenuation = 0.5;
+    float attenuation      = 0.2;
+    float contribution     = 0.5;
+    float phaseAttenuation = 0.3;
 
     const float scatteringOctaves = 4.0;
 
@@ -122,7 +122,7 @@ float MultipleOctaveScattering(float density, float mu) {
     float luminance = 0.0;
 
     for (float i = 0.0; i < scatteringOctaves; i++) {
-        float phase = mix(HenyeyGreenstein(-0.2 * c, mu), HenyeyGreenstein(0.8 * c, mu), 0.5);
+        float phase = mix(HenyeyGreenstein(-0.2 * c, mu), HenyeyGreenstein(0.8 * c, mu), 0.3);
         luminance += b * phase * exp(-sigmaT * density * a);
 
         a *= attenuation;
@@ -166,12 +166,14 @@ float ComputeLightVisibility(vec3 pos, vec3 lightDir, float mu) {
     float tLightEnter, tLightExit;
     if (!IntersectCloudLayer(pos, lightDir, tLightEnter, tLightExit)) return 0;
 
-    float dt = tLightExit / float(LIGHT_RAY_STEPS);
-    // dt *= max(abs(dot(lightDir, vec3(0, 1, 0))), 0.1);
+    tLightExit = min(tLightExit, uCloudLayerThickness*1.0);
+
+    float dt = (tLightExit - tLightEnter) / float(LIGHT_RAY_STEPS);
+    vec3 startPos = pos + lightDir * tLightEnter;
     float d = 0.0;
 
     for (int i = 0; i < LIGHT_RAY_STEPS; ++i) {
-        d += SampleDensity(pos + lightDir * dt * float(i));
+        d += SampleDensity(startPos + lightDir * dt * float(i));
     }
     d *= dt;
 
@@ -189,37 +191,42 @@ vec4 RaymarchVolumetricCloud(vec3 ro, vec3 rd) {
 
     float t = max(tEnter, 0.0);
     vec3 pos = ro + rd * t;
-    float horizDist = length(pos - ro);
 
     vec3 radiance = vec3(0.0);
     vec3 totalTransmittance = vec3(1.0);
 
-    float mu = dot(-rd, uSunDir);
+    float mu = dot(rd, uSunDir);
+    float horizDist = length(pos - ro);
 
     vec3 trans;
     GetSkyRadiance(pos - earth_center, uSunDir, 0.0, uSunDir, trans);
     vec3 sunLight = trans * SUN_SPECTRAL_RADIANCE_TO_LUMINANCE;
-    vec3 skyLight = GetSkyRadiance(pos - earth_center, vec3(0, 1, 0), 0.0, uSunDir, trans);
+    vec3 skyIrradiance;
+    GetSunAndSkyIrradiance(pos - earth_center, normalize(pos - earth_center), uSunDir, skyIrradiance);
 
     for (int i = 0; i < CLOUD_RAY_STEPS; i++) {
         if (t > tExit) break;
 
         pos = ro + rd * t;
 
-        if (dot(horizDist, horizDist) > uMaxDistance * uMaxDistance) break;
+        if (horizDist * horizDist > uMaxDistance * uMaxDistance) break;
 
         float density = SampleDensity(pos);
 
         if (density > 0.0) {
+            GetSkyRadiance(pos - earth_center, uSunDir, 0.0, uSunDir, trans);
+            GetSunAndSkyIrradiance(pos - earth_center, normalize(pos - earth_center), uSunDir, skyIrradiance);
+            sunLight = trans * SUN_SPECTRAL_RADIANCE_TO_LUMINANCE;
+
             float sampleSigmaS = uSigmaS * density;
-            float sampleSigmaT = sigmaT * density;
+            float sampleSigmaT = max(sigmaT * density, EPS);
 
             float vis = ComputeLightVisibility(pos, uSunDir, mu);
 
-            float heightFraction = (length(pos - earth_center) - bottom_radius - uCloudLayerBottom) / uCloudLayerThickness;
-            vec3 heightAmbient = mix(skyLight, skyLight, heightFraction); // disabled
-
-            vec3 inscatter = (sunLight * vis + heightAmbient) * sampleSigmaS;
+            float powder = exp(-density * sampleSigmaT);
+            float powderEffect = mix(1.0, powder, smoothstep(0.5, -0.5, mu));
+            vec3 inscatter = (sunLight * vis + skyIrradiance) * sampleSigmaS;
+            inscatter *= powderEffect;
 
             float transmittance = exp(-sampleSigmaT * dt);
 
@@ -237,9 +244,9 @@ vec4 RaymarchVolumetricCloud(vec3 ro, vec3 rd) {
     }
 
     // Convert transmittance to alpha
-   float alpha = 1.0 - dot(totalTransmittance, vec3(0.2126, 0.7152, 0.0722));
+    float alpha = 1.0 - dot(totalTransmittance, vec3(0.2126, 0.7152, 0.0722));
 
-    float fog = exp(-horizDist / fogFactor);// ! hack probably should use bruneton transmittance
+    float fog = exp(-horizDist / fogFactor);// ! hack probably should use bruneton transmittance    
 
     return vec4(radiance, alpha) * fog;
 }
@@ -255,7 +262,7 @@ vec4 HighAltitudeCloud(vec3 ro, vec3 rd) {
 
     vec3 pos = ro + rd * t;
     vec3 normal = normalize(pos - earth_center);
-    float mu    = dot(rd, uSunDir);
+    float mu    = dot(-rd, uSunDir);
     float phase = mix(HenyeyGreenstein(-0.1, mu), HenyeyGreenstein(0.6, mu), 0.6);
 
     vec3 trans;
@@ -284,15 +291,14 @@ vec4 HighAltitudeCloud(vec3 ro, vec3 rd) {
         result.a   += (1.0 - result.a) * alpha;
     }
 
-    float fog = exp(-length((ro + rd * t).xz - ro.xz) / fogFactor);
-
+    float fog = exp(-length((ro + rd * t) - ro) / fogFactor);
     return result * fog;
 }
 
 void main() {
     vec3 rd = normalize(vRay);
     vec4 volumetric = RaymarchVolumetricCloud(uCameraPos, rd);
-    vec4 hightAlt = HighAltitudeCloud(uCameraPos, rd);
+    vec4 hightAlt = vec4(0.0);
 
     vec4 cloud = volumetric;
     cloud.rgb  += (1.0 - cloud.a) * hightAlt.rgb;

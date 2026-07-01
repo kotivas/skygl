@@ -7,8 +7,6 @@ namespace Sky {
     constexpr int CLOUD_FRAME_WIDTH = 1600 / 2;
     constexpr int CLOUD_FRAME_HEIGHT = 900 / 2;
 
-    constexpr int WEATHER_TRANSITION_DURATION = 30; // seconds
-
     constexpr int DAY_LENGHT = 24 * 60 * 60; // seconds
     constexpr int TIME_MULTIPLIER = 30;
     constexpr float SUN_ANGULAR_RADIUS = glm::radians(0.5f);

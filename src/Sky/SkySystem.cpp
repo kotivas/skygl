@@ -279,7 +279,8 @@ namespace Sky {
             _weatherParameters = _weatherTransition.current();
             _weatherUBO.setData(&_weatherParameters);
         } else {
-            setWeather(pickNextWeather(), 30);
+            std::uniform_real_distribution<float> dist(120.f, 480.f); // random duration weather time
+            setWeather(pickNextWeather(), dist(_rng));
         }
 
         _sun.update(_dayTime, 80); // 157
