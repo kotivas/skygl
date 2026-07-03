@@ -320,7 +320,7 @@ out Number nu, out bool ray_r_mu_intersects_ground) {
  */
 
 void GetRMuMuSNuFromScatteringTextureFragCoord(
-vec3 gl_frag_coord,
+vec3 frag_coord,
 out Length r, out Number mu, out Number mu_s, out Number nu,
 out bool ray_r_mu_intersects_ground) {
     vec4 SCATTERING_TEXTURE_SIZE = vec4(
@@ -329,10 +329,10 @@ out bool ray_r_mu_intersects_ground) {
     SCATTERING_TEXTURE_MU_SIZE,
     SCATTERING_TEXTURE_R_SIZE);
 
-    Number frag_coord_nu = floor(gl_frag_coord.x / Number(SCATTERING_TEXTURE_MU_S_SIZE));
-    Number frag_coord_mu_s = mod(gl_frag_coord.x, Number(SCATTERING_TEXTURE_MU_S_SIZE));
+    Number frag_coord_nu = floor(frag_coord.x / Number(SCATTERING_TEXTURE_MU_S_SIZE));
+    Number frag_coord_mu_s = mod(frag_coord.x, Number(SCATTERING_TEXTURE_MU_S_SIZE));
 
-    vec4 uvwz = vec4(frag_coord_nu, frag_coord_mu_s, gl_frag_coord.y, gl_frag_coord.z) / SCATTERING_TEXTURE_SIZE;
+    vec4 uvwz = vec4(frag_coord_nu, frag_coord_mu_s, frag_coord.y, frag_coord.z) / SCATTERING_TEXTURE_SIZE;
 
     GetRMuMuSNuFromScatteringTextureUvwz(uvwz, r, mu, mu_s, nu, ray_r_mu_intersects_ground);
 
@@ -347,14 +347,14 @@ out bool ray_r_mu_intersects_ground) {
  */
 
 void ComputeSingleScatteringTexture(
-TransmittanceTexture transmittance_texture, vec3 gl_frag_coord,
+TransmittanceTexture transmittance_texture, vec3 frag_coord,
 out IrradianceSpectrum rayleigh, out IrradianceSpectrum mie) {
     Length r;
     Number mu;
     Number mu_s;
     Number nu;
     bool ray_r_mu_intersects_ground;
-    GetRMuMuSNuFromScatteringTextureFragCoord(gl_frag_coord,
+    GetRMuMuSNuFromScatteringTextureFragCoord(frag_coord,
     r, mu, mu_s, nu, ray_r_mu_intersects_ground);
     ComputeSingleScattering(transmittance_texture,
     r, mu, mu_s, nu, ray_r_mu_intersects_ground, rayleigh, mie);
@@ -697,13 +697,13 @@ ReducedScatteringTexture single_rayleigh_scattering_texture,
 ReducedScatteringTexture single_mie_scattering_texture,
 ScatteringTexture multiple_scattering_texture,
 IrradianceTexture irradiance_texture,
-vec3 gl_frag_coord, int scattering_order) {
+vec3 frag_coord, int scattering_order) {
     Length r;
     Number mu;
     Number mu_s;
     Number nu;
     bool ray_r_mu_intersects_ground;
-    GetRMuMuSNuFromScatteringTextureFragCoord(gl_frag_coord,
+    GetRMuMuSNuFromScatteringTextureFragCoord(frag_coord,
     r, mu, mu_s, nu, ray_r_mu_intersects_ground);
 
     return ComputeScatteringDensity(transmittance_texture,
@@ -715,12 +715,12 @@ vec3 gl_frag_coord, int scattering_order) {
 RadianceSpectrum ComputeMultipleScatteringTexture(
 TransmittanceTexture transmittance_texture,
 ScatteringDensityTexture scattering_density_texture,
-vec3 gl_frag_coord, out Number nu) {
+vec3 frag_coord, out Number nu) {
     Length r;
     Number mu;
     Number mu_s;
     bool ray_r_mu_intersects_ground;
-    GetRMuMuSNuFromScatteringTextureFragCoord(gl_frag_coord,
+    GetRMuMuSNuFromScatteringTextureFragCoord(frag_coord,
     r, mu, mu_s, nu, ray_r_mu_intersects_ground);
 
     return ComputeMultipleScattering(transmittance_texture,

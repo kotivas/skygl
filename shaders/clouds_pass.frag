@@ -41,14 +41,14 @@ layout (std140, binding = 2) uniform WeatherParameters {
 #define   CLOUD_RAY_STEPS 160
 #define   LIGHT_RAY_STEPS 16
 
-const float fogFactor = uMaxDistance / 3.0;
-const float sigmaT = uSigmaA + uSigmaS;// SIGMA TRANSMITTANCE
+float fogFactor = uMaxDistance / 3.0;
+float sigmaT = uSigmaA + uSigmaS;// SIGMA TRANSMITTANCE
 
 const float cirrusSpeedFactor = 3.5;
 const float altoSpeedFactor = 2.0;
 const float detailStrength = 0.1;
 
-const vec3 earth_center = vec3(0, -bottom_radius, 0);
+vec3 earth_center = vec3(0, -bottom_radius, 0);
 
 #define EPS 1e-5
 

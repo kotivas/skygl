@@ -42,9 +42,9 @@ namespace Gl {
 
                 std::filesystem::path includePath = absolutePath.parent_path() / includeFile;
 
-                output << "\n#line 1 \"" << includePath.generic_string() << "\"\n";
+                //output << "\n#line 1 \"" << includePath.generic_string() << "\"\n";
                 output << ParseShaderSource(includePath, includedFiles);
-                output << "\n#line " << (lineNumber + 1) << " \"" << absolutePath.generic_string() << "\"\n";
+                //output << "\n#line " << (lineNumber + 1) << " \"" << absolutePath.generic_string() << "\"\n";
             } else {
                 output << line << '\n';
             }

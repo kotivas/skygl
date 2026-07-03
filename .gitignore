@@ -6,3 +6,6 @@ out
 .idea
 .vs
 /CMakeSettings.json
+vcpkg-configuration.json
+vcpkg.json
+/vcpkg_installed

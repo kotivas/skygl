@@ -199,12 +199,12 @@ void GetRMuSFromIrradianceTextureUv(vec2 uv, out Length r, out Number mu_s) {
 
 IrradianceSpectrum ComputeDirectIrradianceTexture(
 TransmittanceTexture transmittance_texture,
-vec2 gl_frag_coord) {
+vec2 frag_coord) {
     Length r;
     Number mu_s;
     vec2 IRRADIANCE_TEXTURE_SIZE = vec2(IRRADIANCE_TEXTURE_WIDTH, IRRADIANCE_TEXTURE_HEIGHT);
 
-    GetRMuSFromIrradianceTextureUv(gl_frag_coord / IRRADIANCE_TEXTURE_SIZE, r, mu_s);
+    GetRMuSFromIrradianceTextureUv(frag_coord / IRRADIANCE_TEXTURE_SIZE, r, mu_s);
     return ComputeDirectIrradiance(transmittance_texture, r, mu_s);
 }
 
@@ -216,13 +216,13 @@ IrradianceSpectrum ComputeIndirectIrradianceTexture(
 ReducedScatteringTexture single_rayleigh_scattering_texture,
 ReducedScatteringTexture single_mie_scattering_texture,
 ScatteringTexture multiple_scattering_texture,
-vec2 gl_frag_coord, int scattering_order) {
+vec2 frag_coord, int scattering_order) {
     Length r;
     Number mu_s;
 
     vec2 IRRADIANCE_TEXTURE_SIZE = vec2(IRRADIANCE_TEXTURE_WIDTH, IRRADIANCE_TEXTURE_HEIGHT);
 
-    GetRMuSFromIrradianceTextureUv(gl_frag_coord / IRRADIANCE_TEXTURE_SIZE, r, mu_s);
+    GetRMuSFromIrradianceTextureUv(frag_coord / IRRADIANCE_TEXTURE_SIZE, r, mu_s);
 
     return ComputeIndirectIrradiance(single_rayleigh_scattering_texture, single_mie_scattering_texture,
     multiple_scattering_texture, r, mu_s, scattering_order);
