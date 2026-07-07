@@ -29,7 +29,7 @@
 #include <iostream>
 
 Camera camera;
-float exposure = 0.00076f;
+float exposure = 0.0005f;
 float gamma = 2.2f;
 float speed = 100.f / Sky::LenghtUnitInMeters;
 
@@ -177,8 +177,8 @@ void DrawSkyDebugInfo() {
         debugInfo.windSpeed * Sky::LenghtUnitInMeters, debugInfo.transitionDuration, debugInfo.isTransitioning, debugInfo.blendFactor);
     ImGui::Text(formatted.c_str());
 
-    ImGui::Image((ImTextureID)(intptr_t)sky.getCurrentWeatherMap()->getHandle(), ImVec2(256, 256));
-    ImGui::Image((ImTextureID)(intptr_t)sky.getNextWeatherMap()->getHandle(), ImVec2(256, 256));
+    ImGui::Image((ImTextureID)(intptr_t)debugInfo.currWeatherMapHandle, ImVec2(256, 256));
+    ImGui::Image((ImTextureID)(intptr_t)debugInfo.nextWeatherMapHandle, ImVec2(256, 256));
 
     ImGui::End();
 }
@@ -298,7 +298,10 @@ int main() {
 
     InitialLoadShaders();
 
-    sky.initialize(cloudsParams, atm_params, skyShaders, LoadHighCloudsMap());
+    uint8_t* highCloudsMap = LoadHighCloudsMap();
+    sky.initialize(cloudsParams, atm_params, skyShaders, highCloudsMap);
+    delete highCloudsMap;
+    sky.setWeather(Sky::WeatherType::Overcast, 5);
 
     camera = Camera(0.1, 55, {0, 0, 0});
     camera.calcProjMat(render_width, render_height);
@@ -340,8 +343,6 @@ int main() {
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        // ..
 
         glfwSwapBuffers(Gl::window);
         glfwPollEvents();

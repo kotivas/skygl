@@ -39,9 +39,9 @@ layout (std140, binding = 2) uniform WeatherParameters {
 };
 
 #define   CLOUD_RAY_STEPS 160
-#define   LIGHT_RAY_STEPS 16
+#define   LIGHT_RAY_STEPS 6
 
-float fogFactor = uMaxDistance / 3.0;
+float fogFactor = uMaxDistance / 6.0;
 float sigmaT = uSigmaA + uSigmaS;// SIGMA TRANSMITTANCE
 
 const float cirrusSpeedFactor = 3.5;
@@ -109,9 +109,9 @@ float SampleDensity(vec3 pos){
 }
 
 float MultipleOctaveScattering(float density, float mu) {
-    float attenuation      = 0.2;
-    float contribution     = 0.5;
-    float phaseAttenuation = 0.3;
+    float attenuation      = 0.5;
+    float contribution     = 0.6;
+    float phaseAttenuation = 0.2;
 
     const float scatteringOctaves = 4.0;
 
@@ -187,6 +187,7 @@ vec4 RaymarchVolumetricCloud(vec3 ro, vec3 rd) {
 
     if (!IntersectCloudLayer(ro, rd, tEnter, tExit)) return vec4(0.0);
 
+    tExit = min(tExit, uMaxDistance);
     float dt = (tExit - tEnter) / float(CLOUD_RAY_STEPS);
 
     float t = max(tEnter, 0.0);
@@ -263,7 +264,7 @@ vec4 HighAltitudeCloud(vec3 ro, vec3 rd) {
     vec3 pos = ro + rd * t;
     vec3 normal = normalize(pos - earth_center);
     float mu    = dot(-rd, uSunDir);
-    float phase = mix(HenyeyGreenstein(-0.1, mu), HenyeyGreenstein(0.6, mu), 0.6);
+    float phase = mix(HenyeyGreenstein(-0.1, mu), HenyeyGreenstein(0.2, mu), 0.2);
 
     vec3 trans;
     GetSkyRadiance(pos - earth_center, uSunDir, 0.0, uSunDir, trans);
@@ -298,7 +299,7 @@ vec4 HighAltitudeCloud(vec3 ro, vec3 rd) {
 void main() {
     vec3 rd = normalize(vRay);
     vec4 volumetric = RaymarchVolumetricCloud(uCameraPos, rd);
-    vec4 hightAlt = vec4(0.0);
+    vec4 hightAlt = HighAltitudeCloud(uCameraPos, rd);
 
     vec4 cloud = volumetric;
     cloud.rgb  += (1.0 - cloud.a) * hightAlt.rgb;

@@ -18,6 +18,9 @@ namespace Sky {
         float blendFactor;
         float transitionDuration;
         bool isTransitioning;
+
+        GLuint currWeatherMapHandle;
+        GLuint nextWeatherMapHandle;
     };
 
     struct SkyShaders {
@@ -93,8 +96,6 @@ namespace Sky {
         void addTime(float time);
 
         float getTime() const;
-        Gl::Texture* getCurrentWeatherMap() const;
-        Gl::Texture* getNextWeatherMap() const;
 
         void recomputeAtmosphere(const Atm::AtmosphereParameters& params);
 

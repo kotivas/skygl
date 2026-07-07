@@ -4,8 +4,8 @@
 namespace Sky {
     constexpr int ATMOSPHERE_FRAME_WIDTH = 1600;
     constexpr int ATMOSPHERE_FRAME_HEIGHT = 900;
-    constexpr int CLOUD_FRAME_WIDTH = 1600 / 2;
-    constexpr int CLOUD_FRAME_HEIGHT = 900 / 2;
+    constexpr int CLOUD_FRAME_WIDTH = 1600 / 4;
+    constexpr int CLOUD_FRAME_HEIGHT = 900 / 4;
 
     constexpr int DAY_LENGHT = 24 * 60 * 60; // seconds
     constexpr int TIME_MULTIPLIER = 30;
