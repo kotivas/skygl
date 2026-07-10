@@ -112,12 +112,13 @@ namespace Sky {
         void atmospherePass(const Camera& camera);
         void cloudsPass(const Camera& camera);
         WeatherType pickNextWeather() const;
+        void updateWeather(double dt);
 
         Clouds::CloudsModel _cloudsModel;
         Atm::AtmosphereModel _atmosphereModel;
         Sun _sun;
         double _dayTime;
-
+        
         mutable std::mt19937 _rng;
 
         Gl::UniformBuffer _weatherUBO;

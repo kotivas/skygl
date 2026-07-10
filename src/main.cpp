@@ -95,9 +95,11 @@ void DrawSettigs() {
 
     if (ImGui::Button("Clear")) sky.setWeather(Sky::WeatherType::Clear, 5);
     ImGui::SameLine();
-    if (ImGui::Button("ScatteredClouds")) sky.setWeather(Sky::WeatherType::Scattered, 5);
+    if (ImGui::Button("Mostly Clear")) sky.setWeather(Sky::WeatherType::MostlyClear, 5);
     ImGui::SameLine();
-    if (ImGui::Button("BrokenClouds")) sky.setWeather(Sky::WeatherType::Broken, 5);
+    if (ImGui::Button("Partly Cloudy")) sky.setWeather(Sky::WeatherType::PartlyCloudy, 5);
+    ImGui::SameLine();
+    if (ImGui::Button("Mostly Cloudy")) sky.setWeather(Sky::WeatherType::MostlyCloudy, 5);
     ImGui::SameLine();
     if (ImGui::Button("Overcast")) sky.setWeather(Sky::WeatherType::Overcast, 5);
     ImGui::SameLine();
@@ -301,9 +303,9 @@ int main() {
     uint8_t* highCloudsMap = LoadHighCloudsMap();
     sky.initialize(cloudsParams, atm_params, skyShaders, highCloudsMap);
     delete highCloudsMap;
-    sky.setWeather(Sky::WeatherType::Overcast, 5);
 
-    camera = Camera(0.1, 55, {0, 0, 0});
+    float hundermeters = 100 / Sky::LenghtUnitInMeters;
+    camera = Camera(hundermeters, 55, {0, hundermeters, 0});
     camera.calcProjMat(render_width, render_height);
 
     double lastTime = glfwGetTime();

@@ -2,15 +2,18 @@
 #include <glm/glm.hpp>
 
 namespace Sky {
-    constexpr int ATMOSPHERE_FRAME_WIDTH = 1600;
-    constexpr int ATMOSPHERE_FRAME_HEIGHT = 900;
-    constexpr int CLOUD_FRAME_WIDTH = 1600 / 4;
-    constexpr int CLOUD_FRAME_HEIGHT = 900 / 4;
+    constexpr int ATMOSPHERE_FRAME_WIDTH = 1920;
+    constexpr int ATMOSPHERE_FRAME_HEIGHT = 1080;
+    constexpr int CLOUD_FRAME_WIDTH = 480; // 960
+    constexpr int CLOUD_FRAME_HEIGHT = 270; // 540
 
     constexpr int DAY_LENGHT = 24 * 60 * 60; // seconds
     constexpr int TIME_MULTIPLIER = 30;
     constexpr float SUN_ANGULAR_RADIUS = glm::radians(0.5f);
-    constexpr float LenghtUnitInMeters = 1000.0; // If you use a 1:1 scale, visual bugs begin to appear when increasing the position coordinates (due to float)
+    constexpr float LenghtUnitInMeters = 1000.0; // If you use a 1:1 scale, visual bugs begin to appear when increasing the position coordinates (due to float limitations)
+
+    constexpr float WEATHER_TRANSITION_MIN = 120.;
+    constexpr float WEATHER_TRANSITION_MAX = 300.;
 
     namespace Clouds {
         constexpr int WEATHER_MAP_SIZE = 256;

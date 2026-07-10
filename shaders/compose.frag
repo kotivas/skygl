@@ -27,9 +27,7 @@ void main() {
     vec3 sky = texture(skyTexture, TexCoords).rgb;
     vec4 clouds = texture(cloudsTexture, TexCoords);
 
-    //    vec4 color = vec4(mix(sky, clouds.rgb, clouds.a), 1.0);
     vec4 color = vec4(sky * (1.0 - clouds.a) + clouds.rgb, 1.0);
-
     color.rgb = Hable(color.rgb, uExposure, WHITE_POINT);
     color.rgb = pow(color.rgb, vec3(1.0 / uGamma));
 

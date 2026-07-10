@@ -44,7 +44,7 @@ namespace Input {
     }
 
     void ResizeCallback(GLFWwindow* window, int width, int height) {
-        g_windowHeight = width;
+        g_windowHeight = height;
         g_windowWidth = width;
     }
 

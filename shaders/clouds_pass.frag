@@ -199,11 +199,9 @@ vec4 RaymarchVolumetricCloud(vec3 ro, vec3 rd) {
     float mu = dot(rd, uSunDir);
     float horizDist = length(pos - ro);
 
-    vec3 trans;
-    GetSkyRadiance(pos - earth_center, uSunDir, 0.0, uSunDir, trans);
-    vec3 sunLight = trans * SUN_SPECTRAL_RADIANCE_TO_LUMINANCE;
+    vec3 sky_transmittance;
+    vec3 sunLight;
     vec3 skyIrradiance;
-    GetSunAndSkyIrradiance(pos - earth_center, normalize(pos - earth_center), uSunDir, skyIrradiance);
 
     for (int i = 0; i < CLOUD_RAY_STEPS; i++) {
         if (t > tExit) break;
@@ -215,14 +213,19 @@ vec4 RaymarchVolumetricCloud(vec3 ro, vec3 rd) {
         float density = SampleDensity(pos);
 
         if (density > 0.0) {
-            GetSkyRadiance(pos - earth_center, uSunDir, 0.0, uSunDir, trans);
+
+            // get lightning
+            GetSkyRadiance(pos - earth_center, uSunDir, 0.0, uSunDir, sky_transmittance);
             GetSunAndSkyIrradiance(pos - earth_center, normalize(pos - earth_center), uSunDir, skyIrradiance);
-            sunLight = trans * SUN_SPECTRAL_RADIANCE_TO_LUMINANCE;
+            sunLight = sky_transmittance * SUN_SPECTRAL_RADIANCE_TO_LUMINANCE;
+            // night
+            skyIrradiance = max(vec3(10), skyIrradiance);
+            sunLight = max(vec3(100), sunLight);
+  
+            float vis = ComputeLightVisibility(pos, uSunDir, mu);
 
             float sampleSigmaS = uSigmaS * density;
             float sampleSigmaT = max(sigmaT * density, EPS);
-
-            float vis = ComputeLightVisibility(pos, uSunDir, mu);
 
             float powder = exp(-density * sampleSigmaT);
             float powderEffect = mix(1.0, powder, smoothstep(0.5, -0.5, mu));

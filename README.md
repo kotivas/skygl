@@ -26,10 +26,8 @@ Copy the `res` folder next to the executable, then run it
 
 ## Planned
 
-- [ ] Procedural weather system
-- [ ] Volumetric cloud optimization
+- [ ] Temporial reprojection
 - [ ] Night sky
-- [ ] Simplify bruneton atmosphere model?
 
 ## References
 
