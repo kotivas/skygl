@@ -2,7 +2,7 @@
 
 ![OpenGL](https://img.shields.io/badge/OpenGL-4.x-blue?style=flat-square) ![Status](https://img.shields.io/badge/Status-In%20Development-orange?style=flat-square)
 
-Project written with OpenGL focused on creating and exploring in-game sky including weather, clouds and atmosphere
+Project written with OpenGL focused on creating and exploring in-game sky including clouds and atmosphere
 rendering.
 
 ![preview](res/preview.jpg)
@@ -26,7 +26,7 @@ Copy the `res` folder next to the executable, then run it
 
 ## Planned
 
-- [ ] Temporial reprojection
+- [ ] Temporal reprojection
 - [ ] Night sky
 
 ## References
