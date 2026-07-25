@@ -7,6 +7,11 @@ rendering.
 
 ![preview](res/preview.jpg)
 
+## Core
+core idea is raymarching through the clouds with density accumulation, plus light scattering. Light scattering is a single-scatter, energy-conserving integral along the view ray using a dual-lobe Henyey-Greenstein phase function, with a 4-octave attenuation trick faking multiple scattering. also threw in some cheap 2d high-altitude clouds, no raymarch cost, they just keep the sky from looking empty. sun and sky light get sampled at every raymarch point too, and since that's built on the Bruneton atmosphere it's just texture lookups, basically free.
+
+instead of a single static weather map there are six procedural weather states (clear to storm), each built from its own noise parameters. a scheduler picks the next state using weighted random selection, and the sky blends smoothly between current and next state over time. since the states themselves are procedural, blending between them keeps producing new in-between weather that never quite repeats.
+
 ## Build & Run
 ### Requirements
 
